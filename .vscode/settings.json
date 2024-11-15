@@ -1,0 +1,9 @@
+{
+  "markdown.extension.toc.slugifyMode": "github",
+  "markdown.extension.toc.levels": "2..3",
+  "cSpell.enabled": false,
+  "cSpell.words": [
+    "errmsg",
+    "Nvir"
+  ]
+}
