@@ -8,8 +8,6 @@ defmodule Nvir.MixProject do
     [
       app: :nvir,
       name: "Nvir",
-      description:
-        "A fully-featured dotenv parser with environment variables helpers. Fork of Dotenvy with fallback to system environment variables.",
       version: @version,
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
@@ -18,9 +16,6 @@ defmodule Nvir.MixProject do
       package: package(),
       modkit: modkit(),
       dialyzer: dialyzer(),
-      elixirc_paths: elixirc_paths(Mix.env()),
-      test_coverage: [tool: ExCoveralls],
-      preferred_cli_env: [coveralls: :test, "coveralls.detail": :test],
       docs: [
         main: "readme",
         source_ref: "v#{@version}",
@@ -36,15 +31,14 @@ defmodule Nvir.MixProject do
     ]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
-  defp elixirc_paths(_), do: ["lib"]
-
   defp package do
-    []
-  end
-
-  def links do
-    %{}
+    [
+      description:
+        "A fully-featured dotenv parser with environment variables helpers. Fork of Dotenvy with fallback to system environment variables.",
+      licenses: ["MIT"],
+      links: %{"Github" => @source_url},
+      maintainers: ["Ludovic Demblans <ludovic@demblans.com>"]
+    ]
   end
 
   def application do
