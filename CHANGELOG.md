@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2] - 2024-11-17
+
+### 📚 Documentation
+
+- Document parsed templates
+
 ## [0.9.1] - 2024-11-17
 
 ### 📚 Documentation
