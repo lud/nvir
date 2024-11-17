@@ -1,4 +1,8 @@
 defmodule Nvir.Cast do
+  @moduledoc """
+  Collection of casters for environment variables.
+  """
+
   @type caster ::
           :string
           | :string?
@@ -25,6 +29,18 @@ defmodule Nvir.Cast do
           | {:error, :empty}
           | {:error, :bad_cast}
   @spec cast(term, caster) :: result
+
+  @doc """
+  Casts an environment variable to the desired type.
+
+  Environment variables are always defined as a string. Thus, the `cast/2`
+  function will only work with strings as it's first argument.
+
+  Please refer to the "Available Casters" of the [README](README.md#available-casters) for a
+  detailed explanation of all casters.
+  """
+  @spec cast(String.t(), caster) :: result
+  def cast(value, caster)
 
   # -- String -----------------------------------------------------------------
 

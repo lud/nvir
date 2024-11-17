@@ -1,6 +1,56 @@
 defmodule Nvir do
+  @moduledoc """
+  Nvir is an environment variable loader and validator.
+
+  Please refer to the [README](README.md#basic-usage) for usage instructions.
+  """
   require Config
 
+  @doc ~S"""
+  Loads specified env files in the system environment. Intended usage is from
+  `config/runtime.exs` in your project
+
+  Variables defined in the files will not override the system environment
+  if they are already defined. To override the system env, please list your
+  files under an `:override` key.
+
+  Files that do not exist are safely ignored.
+
+  Valid values are
+  * A single binary string (a file path).
+  * A list of paths.
+  * A keyword list where the key are:
+    - An environment name such as `:dev` or `:test`.
+    - `:*` That will match any environment.
+    - `:override` which will declare the files as system overrides.
+
+    Values in keywords can be strings, lists, and nested keywords.
+
+  ### Examples
+
+      import Config
+      import Nvir
+
+      # Load a single file
+      dotenv!(".env")
+
+      # Load multiple files
+      dotenv!([".env", ".env.#{config_env()}"])
+
+      # Load files depending on environment
+      dotenv!(
+        *: ".env",
+        dev: ".env.dev",
+        test: ".env.test"
+      )
+
+      # Load files with and without override
+      dotenv!(
+        dev: ".env",
+        test: ".env", ".env.test",
+        override: [test: ".env.test.local"]
+      )
+  """
   def dotenv!(sources) do
     env = guess_env()
     {regular, overrides} = env_sources(env, sources)
@@ -160,6 +210,14 @@ defmodule Nvir do
     defp collect_overrides_sub(n, _, acc) when is_integer(n), do: [n | acc]
   end
 
+  @doc """
+  Returns the value of the given `var`, transformed and validated by the given
+  `caster`.
+
+  Raises if the variable is not defined or if the caster validation fails.
+
+  Please see the [README](README.md#available-casters) for available casters.
+  """
   def env!(var, caster) do
     case env(var, caster) do
       {:ok, value} -> value
@@ -167,6 +225,16 @@ defmodule Nvir do
     end
   end
 
+  @doc """
+  Returns the value of the given `var`, transformed and validated by the given
+  `caster`.
+
+  Returns the `default` value if the variable is not defined.
+
+  Raises if the caster validation fails.
+
+  Please see the [README](README.md#available-casters) for available casters.
+  """
   def env!(var, caster, default) do
     case env(var, caster, default) do
       {:ok, value} -> value
@@ -174,6 +242,7 @@ defmodule Nvir do
     end
   end
 
+  @doc false
   def env(var, caster) do
     case System.fetch_env(var) do
       {:ok, value} -> cast(var, value, caster)
@@ -181,6 +250,7 @@ defmodule Nvir do
     end
   end
 
+  @doc false
   def env(var, caster, default) do
     case System.fetch_env(var) do
       {:ok, value} -> cast(var, value, caster)

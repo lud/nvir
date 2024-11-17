@@ -35,7 +35,7 @@ defmodule Nvir.MixProject do
       description:
         "A fully-featured dotenv parser with environment variables helpers. Fork of Dotenvy with fallback to system environment variables.",
       licenses: ["MIT"],
-      links: %{"Github" => @source_url},
+      links: %{"Github" => @source_url, "CHANGELOG" => "#{@source_url}/blob/main/CHANGELOG.md"},
       maintainers: ["Ludovic Demblans <ludovic@demblans.com>"]
     ]
   end
@@ -57,7 +57,8 @@ defmodule Nvir.MixProject do
       {:ex_check, "~> 0.16.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false}
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.22.0", only: :dev, runtime: false}
     ]
   end
 

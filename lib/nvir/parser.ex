@@ -1,6 +1,10 @@
 # credo:disable-for-this-file Credo.Check.Refactor.Nesting
 
 defmodule Nvir.Parser do
+  @moduledoc """
+  A simple .env file parser.
+  """
+
   require Record
   # TODO unused level ?
   Record.defrecord(:buffer, [:text, :line, :column, :level, :stack])
@@ -411,15 +415,15 @@ defmodule Nvir.Parser do
 
   # -- Buffer -----------------------------------------------------------------
 
-  def buffer(text, line, column) do
+  defp buffer(text, line, column) do
     buffer(text: text, line: line, column: column, level: 0, stack: [])
   end
 
-  def buffer(buf, text, line, column) do
+  defp buffer(buf, text, line, column) do
     buffer(buf, text: text, line: line, column: column)
   end
 
-  def empty_buffer?(buffer(text: text)), do: text == ""
+  defp empty_buffer?(buffer(text: text)), do: text == ""
 
   defp take(buffer(text: text, line: line, column: column) = buf) do
     case text do
@@ -464,6 +468,13 @@ defmodule Nvir.Parser do
 
   # -- Entrypoint -------------------------------------------------------------
 
+  @doc """
+  Returns a list of `{key, value}` for all variables in the given content.
+
+  This function only parses strings, and will not attempt to read from the given
+  `path`. The `path` variable is only useful to give more information when an
+  error is returned.
+  """
   def parse(input, path \\ "(nofile)") do
     # path is only used for error reporting here
     input = input <> "\n"
@@ -487,7 +498,7 @@ defmodule Nvir.Parser do
     end
   end
 
-  def do_parse(buf, parser, tokens) do
+  defp do_parse(buf, parser, tokens) do
     buf = consume_whitespace(buf)
 
     if empty_buffer?(buf) do

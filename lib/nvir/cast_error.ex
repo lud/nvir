@@ -1,6 +1,18 @@
 defmodule Nvir.CastError do
+  @moduledoc """
+  Exception defining an invalid cast. For instance with this env file:
+
+
+      NOT_AN_INT=some string
+
+  Calling `Nvir.env!/2` with the `:integer!` caster will raise an
+  `#{inspect(__MODULE__)}` exception.
+
+      Nvir.env!("NOT_AN_INT", :integer!)
+  """
   defexception [:var, :caster, :reason]
 
+  @impl true
   def message(%{var: var, caster: caster, reason: reason}) do
     "could not cast environment variable #{inspect(var)}: #{format_reason(reason, caster)}"
   end

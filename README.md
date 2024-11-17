@@ -36,6 +36,7 @@ the predefined system environment variables by default.
   - [Important Edge Case](#important-edge-case)
   - [Rules for override files](#rules-for-override-files)
 
+
 ## Installation
 
 As usual, pull the library from you `mix.exs` file.
@@ -47,6 +48,8 @@ def deps do
   ]
 end
 ```
+
+<!-- README:moduledoc -->
 
 ## Basic Usage
 
