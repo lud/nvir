@@ -4,18 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [0.9.1] - 2024-11-17
 
-### Documentation
+### 📚 Documentation
 
 - Added documentation to all functions
 
-### Miscellaneous Tasks
+### ⚙️ Miscellaneous Tasks
 
 - Added changelog
 - README ordering
+- Versionning with mix version
 
 ## [0.9.0] - 2024-11-17
 
-### Miscellaneous Tasks
+### ⚙️ Miscellaneous Tasks
 
 - Initialization of the repository
 - Added license
