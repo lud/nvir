@@ -12,7 +12,6 @@ defmodule Nvir.MixProject do
       elixir: "~> 1.13",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
-      aliases: aliases(),
       package: package(),
       modkit: modkit(),
       dialyzer: dialyzer(),
@@ -42,10 +41,6 @@ defmodule Nvir.MixProject do
   end
 
   def application do
-    []
-  end
-
-  defp aliases do
     []
   end
 
