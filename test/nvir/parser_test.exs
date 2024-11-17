@@ -559,7 +559,7 @@ defmodule Nvir.ParserTest do
                B="""
                ''')
 
-      assert %Nvir.ParseError{line: 2} = parse_error
+      assert %Nvir.ParseError{line: 3} = parse_error
 
       valid_parse_error!(parse_error)
     end

@@ -21,6 +21,9 @@ defmodule Nvir.Parser do
               [?ú, ?Ú, ?ù, ?Ù, ?û, ?Û, ?ü, ?Ü]
             ])
 
+  @type buffer :: buffer()
+  @type parser :: (buffer -> {:ok, term, buffer} | {:error, {atom, term, buffer()}})
+
   defmacro debug(label \\ nil, function) do
     {callsite_fun, arity} = __CALLER__.function
 
@@ -73,6 +76,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec expressions :: parser
   defp expressions do
     many1(
       choice([
@@ -84,6 +88,7 @@ defmodule Nvir.Parser do
     |> skip_ignored()
   end
 
+  @spec entry :: parser
   defp entry do
     sequence([
       ignore_spaces(),
@@ -101,10 +106,12 @@ defmodule Nvir.Parser do
     |> map(fn [k, v] -> {:entry, k, v} end)
   end
 
+  @spec newline :: parser
   defp newline do
     char(?\n)
   end
 
+  @spec comment_line :: parser
   defp comment_line do
     sequence([
       many0(space()),
@@ -114,21 +121,25 @@ defmodule Nvir.Parser do
     ])
   end
 
+  @spec ignore_spaces :: parser
   defp ignore_spaces do
     tag_ignore(many0(space()))
   end
 
+  @spec key_char :: parser
   defp key_char do
     char([?A..?Z, ?a..?z, ?0..?9, ?_] ++ @accented)
   end
 
+  @spec key :: parser
   defp key do
     many1(key_char())
   end
 
+  @spec value :: parser
   defp value do
     choice([
-      raw_value_opt_comment_eol(),
+      raw_value_opt_comment(),
       double_quoted_string_opt_comment(),
       single_quoted_string_opt_comment(),
       multiline_double_quoted_string(),
@@ -136,7 +147,8 @@ defmodule Nvir.Parser do
     ])
   end
 
-  defp raw_value_opt_comment_eol do
+  @spec raw_value_opt_comment :: parser
+  defp raw_value_opt_comment do
     sequence([
       many0(
         choice([
@@ -146,22 +158,24 @@ defmodule Nvir.Parser do
         ])
       )
       |> skip_ignored(),
-      tag_ignore(eol())
+      tag_ignore(eol_or_eos())
     ])
     |> skip_ignored()
   end
 
+  @spec double_quoted_string_opt_comment :: parser
   defp double_quoted_string_opt_comment do
     sequence([
       tag_ignore(char(?")),
       many0(char_in_double_quotes()),
       tag_ignore(char(?")),
       tag_ignore(maybe(comment_after_quote())),
-      tag_ignore(eol())
+      tag_ignore(eol_or_eos())
     ])
     |> skip_ignored()
   end
 
+  @spec char_in_double_quotes :: parser
   defp char_in_double_quotes(allow_double_quote? \\ false) do
     bad_chars = [?\n]
     bad_chars = if allow_double_quote?, do: bad_chars, else: [?" | bad_chars]
@@ -173,21 +187,25 @@ defmodule Nvir.Parser do
     ])
   end
 
+  @spec multiline_double_quoted_string :: parser
   defp multiline_double_quoted_string do
-    sequence([
+    commit(
       tag_ignore(string(~s("""\n))),
-      many0(
-        sequence([
-          lookahead_not(string(~s("""))),
-          many0(char_in_double_quotes(true)),
-          eol()
-        ])
-      ),
-      tag_ignore(string(~s("""\n)))
-    ])
+      [
+        many0(
+          sequence([
+            lookahead_not(string(~s("""))),
+            many0(char_in_double_quotes(true)),
+            eol()
+          ])
+        ),
+        tag_ignore(choice([string(~s("""\n)), sequence([string(~s(""")), eos()])]))
+      ]
+    )
     |> skip_ignored()
   end
 
+  @spec interpolation_variable :: parser
   defp interpolation_variable do
     choice([
       sequence([char(?$), key(), lookahead_not(key_char())])
@@ -200,17 +218,19 @@ defmodule Nvir.Parser do
     ])
   end
 
+  @spec single_quoted_string_opt_comment :: parser
   defp single_quoted_string_opt_comment do
     sequence([
       tag_ignore(char(?')),
       many0(char_in_single_quotes()),
       tag_ignore(char(?')),
       tag_ignore(maybe(comment_after_quote())),
-      tag_ignore(eol())
+      tag_ignore(eol_or_eos())
     ])
     |> skip_ignored()
   end
 
+  @spec char_in_single_quotes :: parser
   defp char_in_single_quotes(allow_single_quote? \\ false) do
     bad_chars = [?\n]
     bad_chars = if allow_single_quote?, do: bad_chars, else: [?' | bad_chars]
@@ -221,6 +241,7 @@ defmodule Nvir.Parser do
     ])
   end
 
+  @spec multiline_single_quoted_string :: parser
   defp multiline_single_quoted_string do
     sequence([
       tag_ignore(string(~s('''\n))),
@@ -231,11 +252,12 @@ defmodule Nvir.Parser do
           eol()
         ])
       ),
-      tag_ignore(string(~s('''\n)))
+      tag_ignore(choice([string(~s('''\n)), sequence([string(~s(''')), eos()])]))
     ])
     |> skip_ignored()
   end
 
+  @spec comment_after_quote :: parser
   defp comment_after_quote do
     sequence([
       many0(space()),
@@ -244,39 +266,61 @@ defmodule Nvir.Parser do
     ])
   end
 
+  @spec space :: parser
   defp space do
     char(?\s)
   end
 
+  @spec eol :: parser
   defp eol do
     char(?\n)
   end
 
+  @spec eos :: parser
+  defp eos do
+    fn input ->
+      case take(input) do
+        :EOI -> {:ok, [], input}
+        {c, rest} -> {:error, {:not_eoi, c, rest}}
+      end
+    end
+  end
+
+  @spec eol_or_eos :: parser
+  defp eol_or_eos do
+    choice([eol(), eos()])
+  end
+
+  @spec not_eol :: parser
   defp not_eol do
     not_char(?\n)
   end
 
+  @spec satisfy(parser, function) :: parser
   defp satisfy(parser, acceptor) do
     fn input ->
       with {:ok, term, rest} <- parser.(input) do
         if acceptor.(term),
           do: {:ok, term, rest},
-          else: {:error, {:predicate, input}}
+          else: {:error, {:predicate, nil, input}}
       end
     end
   end
 
+  @spec lookahead_not(parser) :: parser
   defp lookahead_not(parser) do
     fn input ->
       case parser.(input) do
-        {:ok, _, _} -> {:error, {:lookahead_not, input}}
+        {:ok, _, _} -> {:error, {:lookahead_not, nil, input}}
         {:error, _} -> {:ok, [], input}
       end
     end
   end
 
+  @spec char(term) :: parser
   defp char(expected), do: satisfy(char(), fn char -> char_match?(char, expected) end)
 
+  @spec char_match?(integer, term) :: boolean
   defp char_match?(char, codepoint) when is_integer(codepoint), do: char == codepoint
   defp char_match?(char, list) when is_list(list), do: Enum.any?(list, &char_match?(char, &1))
   defp char_match?(char, _.._//_ = range), do: char in range
@@ -288,6 +332,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec string(String.t()) :: parser
   defp string(expected) do
     fn input ->
       case consume_string(input, expected) do
@@ -297,18 +342,21 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec not_char(term) :: parser
   defp not_char(rejected),
     do: satisfy(char(), fn char -> not char_match?(char, rejected) end)
 
+  @spec char :: parser
   defp char do
     fn input ->
       case take(input) do
-        :EOI -> {:error, {:EOI, input}}
+        :EOI -> {:error, {:EOI, nil, input}}
         {char, buf} -> {:ok, char, buf}
       end
     end
   end
 
+  @spec sequence([parser]) :: parser
   defp sequence(parsers) do
     fn input ->
       case parsers do
@@ -323,7 +371,13 @@ defmodule Nvir.Parser do
     end
   end
 
-  defp choice(parsers, prev_reason \\ nil) do
+  @spec choice([parser]) :: parser
+  defp choice([_, _ | _] = parsers) do
+    # minimum 2 parsers so we always have a prev reason
+    do_choice(parsers, nil)
+  end
+
+  defp do_choice(parsers, prev_reason) do
     fn input ->
       case parsers do
         [] ->
@@ -331,11 +385,12 @@ defmodule Nvir.Parser do
 
         [first_parser | other_parsers] ->
           with {:error, reason} <- first_parser.(input),
-               do: choice(other_parsers, reason).(input)
+               do: do_choice(other_parsers, reason).(input)
       end
     end
   end
 
+  @spec many0(parser) :: parser
   defp many0(many0_parser) do
     fn input ->
       case many0_parser.(input) do
@@ -349,6 +404,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec many1(parser) :: parser
   defp many1(many1_parser) do
     fn input ->
       case many1_parser.(input) do
@@ -362,6 +418,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec maybe(parser) :: parser
   defp maybe(parser) do
     fn input ->
       case parser.(input) do
@@ -371,14 +428,17 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec tag_ignore(parser) :: parser
   defp tag_ignore(parser) do
     map(parser, &{:ignore, &1})
   end
 
+  @spec skip_ignored(parser) :: parser
   defp skip_ignored(parser) do
     map(parser, &filter_ignored/1)
   end
 
+  @spec map(parser, function) :: parser
   defp map(parser, mapper) do
     fn
       input when is_function(mapper, 1) ->
@@ -387,6 +447,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec replace(parser, term) :: parser
   defp replace(parser, replacement) do
     fn input ->
       case parser.(input) do
@@ -396,13 +457,28 @@ defmodule Nvir.Parser do
     end
   end
 
-  # -- Helpers ----------------------------------------------------------------
+  @spec commit(parser, [parser]) :: parser
+  # If the first parser succeeds, we will throw an error if the rest of the
+  # parsers fail.
+  defp commit(commit_parser, seq_parsers) do
+    fn input ->
+      with {:ok, token, postcommit_rest} <- commit_parser.(input) do
+        case sequence(seq_parsers).(postcommit_rest) do
+          {:ok, new_tokens, rest} ->
+            {:ok, [token | new_tokens], rest}
 
+          {:error, {tag, arg, failed_rest}} ->
+            throw({:commit_error, tag, arg, postcommit_rest, failed_rest})
+        end
+      end
+    end
+  end
+
+  # -- Helpers ----------------------------------------------------------------
   defp filter_ignored([{:ignore, _} | t]), do: filter_ignored(t)
   defp filter_ignored([h | t]), do: [h | filter_ignored(t)]
   defp filter_ignored([]), do: []
   defp unescape_sequence([?\\, c]), do: convert_escape(c)
-
   defp convert_escape(?n), do: ?\n
   defp convert_escape(?r), do: ?\r
   defp convert_escape(?t), do: ?\t
@@ -415,16 +491,20 @@ defmodule Nvir.Parser do
 
   # -- Buffer -----------------------------------------------------------------
 
+  @spec buffer :: buffer
   defp buffer(text, line, column) do
     buffer(text: text, line: line, column: column, level: 0, stack: [])
   end
 
+  @spec buffer :: buffer
   defp buffer(buf, text, line, column) do
     buffer(buf, text: text, line: line, column: column)
   end
 
+  @spec empty_buffer?(buffer) :: boolean
   defp empty_buffer?(buffer(text: text)), do: text == ""
 
+  @spec take(buffer) :: {integer, buffer} | :EOI
   defp take(buffer(text: text, line: line, column: column) = buf) do
     case text do
       <<?\n, rest::binary>> -> {?\n, buffer(buf, rest, line + 1, 0)}
@@ -433,6 +513,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec consume_string(buffer, binary) :: {:ok, buffer} | :error
   defp consume_string(
          buffer(text: text, line: line, column: column) = buf,
          <<_, _::binary>> = str
@@ -447,6 +528,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec next_cursor(binary, integer, integer) :: {integer, integer}
   defp next_cursor(<<?\n, rest::binary>>, line, _),
     do: next_cursor(rest, line + 1, 0)
 
@@ -477,20 +559,25 @@ defmodule Nvir.Parser do
   """
   def parse(input, path \\ "(nofile)") do
     # path is only used for error reporting here
-    input = input <> "\n"
+    # input = input <> "\n"
     buf = buffer(input, 1, 0)
     parser = expressions()
 
     case do_parse(buf, parser, []) do
       {:ok, tokens} -> {:ok, build_entries(:lists.flatten(tokens))}
-      {:error, reason} -> {:error, to_error(reason, path)}
+      {:error, {_, _, _} = reason} -> {:error, to_error(reason, path)}
     end
+  catch
+    {:commit_error, tag, arg, _postcommit_buf, failed_buf} ->
+      {:error, to_error({tag, arg, failed_buf}, path)}
   end
 
+  @spec to_error({atom, term, buffer}, binary) :: Exception.t()
   defp to_error({tag, arg, buffer(line: line)}, path) do
     %Nvir.ParseError{line: line, tag: tag, arg: arg, path: path}
   end
 
+  @spec consume_whitespace(buffer) :: buffer
   defp consume_whitespace(buf) do
     case take(buf) do
       {char, buf} when char in [?\n, ?\t, ?\s, ?\r] -> consume_whitespace(buf)
@@ -498,6 +585,7 @@ defmodule Nvir.Parser do
     end
   end
 
+  @spec do_parse(buffer, parser, term) :: {:ok, term} | {:error, term}
   defp do_parse(buf, parser, tokens) do
     buf = consume_whitespace(buf)
 
@@ -516,7 +604,6 @@ defmodule Nvir.Parser do
   end
 
   defp build_entry({:entry, k, v}), do: {build_key(k), build_value(v)}
-
   defp build_key(k), do: List.to_string(k)
 
   defp build_value(v) do
