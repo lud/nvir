@@ -9,8 +9,71 @@ It is a fork of [Dotenvy](https://github.com/fireproofsocks/dotenvy) that uses
 the predefined system environment variables by default.
 
 
+
+## Installation
+
+As usual, pull the library from your `mix.exs` file.
+
+```elixir
+def deps do
+  [
+    {:nvir, "~> 1.0"},
+  ]
+end
+```
+
+
+
+## Basic Usage
+
+You will generally use `Nvir` from your `config/runtime.exs` file.
+
+* Import the module functions, and call `dotenv!/1` to load your files.
+* Use `env!/2` to require a variable and validate it.
+* Use `env!/3` to provide a default value. Default values are not validated.
+
+Note that you do not have to call `dotenv!/1` to use the `env` functions. You can
+use this library for validation only.
+
+```elixir
+# runtime.exs
+
+# Import the library
+import Nvir
+
+# Load your env files for local development
+dotenv!([".env", ".env.#{config_env()}"])
+
+# Configure your different services with the env!/2 and env!/3 functions.
+config :my_app, MyAppWeb.Endpoint,
+  secret_key_base: env!("SECRET_KEY_BASE", :string!),
+  url: [host: env!("HOST", :string!), port: 443, scheme: "https"]
+
+config :my_app, MyApp.Repo,
+  username: env!("DB_USERNAME", :string!),
+  password: env!("DB_PASSWORD", :string!),
+  database: env!("DB_DATABASE", :string!),
+  # You can provide default values with env!/3
+  hostname: env!("DB_HOSTNAME", :string!, "localhost"),
+  port: env!("DB_PORT", :integer, 5432),
+  pool_size: env!("POOL_SIZE", :integer, 10),
+  queue_target: env!("REPO_QUEUE_TARGET", :integer, 50),
+  queue_interval: env!("REPO_QUEUE_INTERVAL", :integer, 5000)
+
+config :my_app, Oban,
+  queues: [
+    emailing: env!("EMAILING_QUEUE_CONCURRENCY", :integer, 10),
+  ]
+```
+
+This is most of what you need to know to start using this library. Below is an
+advanced guide that covers all configuration and usage options.
+
+## Table of contents
+
 - [Installation](#installation)
 - [Basic Usage](#basic-usage)
+- [Table of contents](#table-of-contents)
 - [Loading files](#loading-files)
   - [Single file](#single-file)
   - [A list of files](#a-list-of-files)
@@ -37,61 +100,6 @@ the predefined system environment variables by default.
   - [Rules for override files](#rules-for-override-files)
 
 
-## Installation
-
-As usual, pull the library from you `mix.exs` file.
-
-```elixir
-def deps do
-  [
-    {:nvir, "~> 1.0"},
-  ]
-end
-```
-
-<!-- README:moduledoc -->
-
-## Basic Usage
-
-You will generally use `Nvir` from your `config/runtime.exs` file.
-
-* Import the module functions, and call `dotenv!/1` to load your files.
-* Use `env!/2` to require a variable and validate it.
-* Use `env!/3` to provide a default value. Default values are not validated.
-
-Note that you do not have to call `dotenv!/1` to use the `env` functions. You can
-use this library for validation only.
-
-```elixir
-# runtime.exs
-
-# Import the library
-import Nvir
-
-# Load your files for local environment
-dotenv!([".env", ".env.#{config_env()}"])
-
-# Configure your different services with the env!/2 and env!/3 functions.
-config :my_app, MyAppWeb.Endpoint,
-  secret_key_base: env!("SECRET_KEY_BASE", :string!),
-  url: [host: env!("HOST", :string!), port: 443, scheme: "https"],
-  # ...
-
-config :my_app, MyApp.Repo,
-  username: env!("DB_USERNAME", :string!),
-  password: env!("DB_PASSWORD", :string!),
-  database: env!("DB_DATABASE", :string!),
-  hostname: env!("DB_HOSTNAME", :string!, "localhost"),
-  port: env!("DB_PORT", :integer, 5432),
-  pool_size: env!("POOL_SIZE", :integer, 10),
-  queue_target: env!("REPO_QUEUE_TARGET", :integer, 50),
-  queue_interval: env!("REPO_QUEUE_INTERVAL", :integer, 5000)
-
-config :my_app, Oban,
-  queues: [
-    emailing: env!("SOME_QUEUE_CONCURRENCY", :integer, 10),
-  ]
-```
 
 ## Loading files
 
