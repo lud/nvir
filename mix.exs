@@ -50,7 +50,7 @@ defmodule Nvir.MixProject do
       {:briefly, "~> 0.5.1", only: :test},
 
       # Doc
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
 
       # Checks
 
