@@ -1,6 +1,8 @@
 defmodule Nvir.ParserTest do
   use ExUnit.Case, async: false
 
+  doctest Nvir.Parser
+
   defp parse(string) do
     Nvir.Parser.parse(string)
   end
@@ -380,8 +382,8 @@ defmodule Nvir.ParserTest do
       assert is_function(enclosed, 1)
       assert is_function(nodelim, 1)
 
-      assert "hello world" = enclosed.(fn "WHO" -> {:ok, "world"} end)
-      assert "hello world" = nodelim.(fn "WHO" -> {:ok, "world"} end)
+      assert "hello world" = enclosed.(fn "WHO" -> "world" end)
+      assert "hello world" = nodelim.(fn "WHO" -> "world" end)
     end
 
     test "in double quoted value" do
@@ -394,8 +396,8 @@ defmodule Nvir.ParserTest do
       assert is_function(enclosed, 1)
       assert is_function(nodelim, 1)
 
-      assert "hello world" = enclosed.(fn "WHO" -> {:ok, "world"} end)
-      assert "hello world" = nodelim.(fn "WHO" -> {:ok, "world"} end)
+      assert "hello world" = enclosed.(fn "WHO" -> "world" end)
+      assert "hello world" = nodelim.(fn "WHO" -> "world" end)
     end
 
     test "in double quoted multiline" do
@@ -412,8 +414,8 @@ defmodule Nvir.ParserTest do
       assert is_function(enclosed, 1)
       assert is_function(nodelim, 1)
 
-      assert "hello world\n" = enclosed.(fn "WHO" -> {:ok, "world"} end)
-      assert "hello world\n" = nodelim.(fn "WHO" -> {:ok, "world"} end)
+      assert "hello world\n" = enclosed.(fn "WHO" -> "world" end)
+      assert "hello world\n" = nodelim.(fn "WHO" -> "world" end)
     end
 
     test "double quoted multiline whole line" do
@@ -430,8 +432,8 @@ defmodule Nvir.ParserTest do
       assert is_function(enclosed, 1)
       assert is_function(nodelim, 1)
 
-      assert "world\n" = enclosed.(fn "WHO" -> {:ok, "world"} end)
-      assert "world\n" = nodelim.(fn "WHO" -> {:ok, "world"} end)
+      assert "world\n" = enclosed.(fn "WHO" -> "world" end)
+      assert "world\n" = nodelim.(fn "WHO" -> "world" end)
     end
 
     test "in single quoted, no interpolation" do
@@ -455,7 +457,7 @@ defmodule Nvir.ParserTest do
     end
 
     defp callmsg(map, vars) do
-      Map.fetch!(map, "MSG").(fn key -> Map.fetch(vars, key) end)
+      Map.fetch!(map, "MSG").(fn key -> Map.get(vars, key, "") end)
     end
 
     test "edge case - vars on both ends" do

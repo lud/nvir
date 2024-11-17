@@ -6,8 +6,7 @@ defmodule Nvir.Parser do
   """
 
   require Record
-  # TODO unused level ?
-  Record.defrecord(:buffer, [:text, :line, :column, :level, :stack])
+  Record.defrecordp(:buffer, [:text, :line, :column])
 
   @accented :lists.flatten([
               [?á, ?Á, ?à, ?À, ?â, ?Â, ?ä, ?Ä, ?ã, ?Ã, ?å, ?Å],
@@ -23,58 +22,11 @@ defmodule Nvir.Parser do
 
   @type buffer :: buffer()
   @type parser :: (buffer -> {:ok, term, buffer} | {:error, {atom, term, buffer()}})
-
-  defmacro debug(label \\ nil, function) do
-    {callsite_fun, arity} = __CALLER__.function
-
-    label =
-      case label do
-        nil ->
-          case function do
-            {:fn, _, _} -> callsite_fun
-            _ -> Macro.to_string(function)
-          end
-
-        _ ->
-          label
-      end
-
-    if Mix.env() == :prod do
-      IO.warn(
-        "debug called for #{callsite_fun}/#{arity} in :prod compile environment",
-        __CALLER__
-      )
-
-      quote do
-        unquote(function)
-      end
-    else
-      Module.put_attribute(__CALLER__.module, :verbose_dbg, true)
-
-      quote do
-        fn the_input ->
-          text = elem(the_input, 1)
-          label = unquote(label)
-
-          IO.puts("#{indentation(the_input)}#{inspect(label)} #{inspect(text)}")
-          the_input = bufdown(the_input, unquote(label))
-          sub = unquote(function)
-          retval = sub.(the_input)
-
-          case retval do
-            {:ok, retval, rest} ->
-              IO.puts("#{indentation(rest)}=> #{inspect(label)} = #{inspect(retval)}")
-              rest = bufup(rest)
-              {:ok, retval, rest}
-
-            {:error, reason} = err when is_binary(reason) ->
-              IO.puts("#{indentation(the_input, -1)}/#{unquote(label)} FAIL: #{inspect(reason)}")
-              err
-          end
-        end
-      end
-    end
-  end
+  @type key :: String.t()
+  @type value :: String.t()
+  @type template :: (resolver -> String.t())
+  @type resolver :: (String.t() -> String.t())
+  @type variable :: {key, value | template}
 
   @spec expressions :: parser
   defp expressions do
@@ -493,7 +445,7 @@ defmodule Nvir.Parser do
 
   @spec buffer :: buffer
   defp buffer(text, line, column) do
-    buffer(text: text, line: line, column: column, level: 0, stack: [])
+    buffer(text: text, line: line, column: column)
   end
 
   @spec buffer :: buffer
@@ -538,28 +490,39 @@ defmodule Nvir.Parser do
   defp next_cursor(<<>>, line, column),
     do: {line, column}
 
-  if Module.get_attribute(__MODULE__, :verbose_dbg) do
-    defp bufdown(buffer(level: level, stack: stack) = buf, fun),
-      do: buffer(buf, level: level + 1, stack: [fun | stack])
-
-    defp bufup(buffer(level: level) = buf) when level > 0, do: buffer(buf, level: level - 1)
-    defp indentation(_, add \\ 0)
-    defp indentation(buffer(level: level), add), do: indentation(level, add)
-    defp indentation(level, add), do: String.duplicate("  ", level + add)
-  end
-
   # -- Entrypoint -------------------------------------------------------------
 
-  @doc """
+  @doc ~S"""
   Returns a list of `{key, value}` for all variables in the given content.
 
   This function only parses strings, and will not attempt to read from the given
   `path`. The `path` variable is only useful to give more information when an
   error is returned.
+
+  Each returned value is either a string, or a function in the case of variable
+  interpolation. That function accepts a resolver calback that provides the
+  value of previous variables.
+
+  ### Resolver example
+
+      iex> file_contents = "GREETING=$INTRO $WHO!"
+      iex> {:ok, [{"GREETING", template}]} = Nvir.Parser.parse(file_contents)
+      iex> resolver = fn
+      ...>   "INTRO" -> "Hello"
+      ...>   "WHO" -> "World"
+      ...> end
+      iex> template.(resolver)
+      "Hello World!"
+
+  When working with the system env you will likely use `&System.get_env(&1, "")`
+  as a resolver. It is common to use an empty string for undefined system
+  variables, but you can of course raise from your function if it better suits
+  your needs.
   """
+  @spec parse(String.t(), String.t()) :: {:ok, [variable]} | {:error, Exception.t()}
   def parse(input, path \\ "(nofile)") do
     # path is only used for error reporting here
-    # input = input <> "\n"
+
     buf = buffer(input, 1, 0)
     parser = expressions()
 
@@ -610,7 +573,7 @@ defmodule Nvir.Parser do
     chunks = chunk_value(:lists.flatten(v), [], [])
 
     if Enum.any?(chunks, &match?({:getvar, _}, &1)) do
-      fn get_var -> interpolate_var(chunks, get_var) end
+      fn resolver -> interpolate_var(chunks, resolver) end
     else
       :erlang.iolist_to_binary(chunks)
     end
@@ -638,25 +601,21 @@ defmodule Nvir.Parser do
     :lists.reverse([List.to_string(:lists.reverse(chars)) | acc])
   end
 
-  defp interpolate_var(chunks, get_var) do
-    :erlang.iolist_to_binary(interpolate_chunks(chunks, get_var))
+  defp interpolate_var(chunks, resolver) do
+    :erlang.iolist_to_binary(interpolate_chunks(chunks, resolver))
   end
 
-  defp interpolate_chunks([{:getvar, key} | t], get_var) do
-    chunk_value =
-      case get_var.(key) do
-        {:ok, value} when is_binary(value) -> value
-        :error -> ""
-      end
-
-    [chunk_value | interpolate_chunks(t, get_var)]
+  defp interpolate_chunks([{:getvar, key} | t], resolver) do
+    chunk_value = resolver.(key)
+    true = is_binary(chunk_value)
+    [chunk_value | interpolate_chunks(t, resolver)]
   end
 
-  defp interpolate_chunks([h | t], get_var) do
-    [h | interpolate_chunks(t, get_var)]
+  defp interpolate_chunks([h | t], resolver) do
+    [h | interpolate_chunks(t, resolver)]
   end
 
-  defp interpolate_chunks([], _get_var) do
+  defp interpolate_chunks([], _resolver) do
     []
   end
 end

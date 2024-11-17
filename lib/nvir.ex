@@ -145,7 +145,10 @@ defmodule Nvir do
   end
 
   defp find_interpolation_value(key, store, fallback) do
-    with :error <- Map.fetch(store, key), do: Map.fetch(fallback, key)
+    with :error <- Map.fetch(store, key),
+         :error <- Map.fetch(fallback, key),
+         do: "",
+         else: ({:ok, v} -> v)
   end
 
   @doc false

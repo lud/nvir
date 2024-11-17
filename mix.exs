@@ -36,7 +36,7 @@ defmodule Nvir.MixProject do
       description:
         "A fully-featured dotenv parser with environment variables helpers. Fork of Dotenvy with fallback to system environment variables.",
       licenses: ["MIT"],
-      links: %{"Github" => @source_url, "CHANGELOG" => "#{@source_url}/blob/main/CHANGELOG.md"},
+      links: %{"Github" => @source_url, "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"},
       maintainers: ["Ludovic Demblans <ludovic@demblans.com>"]
     ]
   end
@@ -79,7 +79,6 @@ defmodule Nvir.MixProject do
       plt_local_path: "_build/plts"
     ]
   end
-
 
   defp versioning do
     [
