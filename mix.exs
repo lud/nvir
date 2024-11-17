@@ -2,7 +2,7 @@ defmodule Nvir.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/lud/nvir"
-  @version "0.9.0"
+  @version "0.9.1"
 
   def project do
     [
@@ -15,6 +15,7 @@ defmodule Nvir.MixProject do
       package: package(),
       modkit: modkit(),
       dialyzer: dialyzer(),
+      versioning: versioning(),
       docs: [
         main: "readme",
         source_ref: "v#{@version}",
@@ -77,5 +78,35 @@ defmodule Nvir.MixProject do
       plt_add_apps: [:ex_unit, :mix],
       plt_local_path: "_build/plts"
     ]
+  end
+
+
+  defp versioning do
+    [
+      annotate: true,
+      before_commit: [
+        &update_readme/1,
+        {:add, "README.md"},
+        &gen_changelog/1,
+        {:add, "CHANGELOG.md"}
+      ]
+    ]
+  end
+
+  def update_readme(vsn) do
+    version = Version.parse!(vsn)
+    readme_vsn = "#{version.major}.#{version.minor}"
+    readme = File.read!("README.md")
+    re = ~r/:cli_mate, "~> \d+\.\d+"/
+    readme = String.replace(readme, re, ":cli_mate, \"~> #{readme_vsn}\"")
+    File.write!("README.md", readme)
+    :ok
+  end
+
+  defp gen_changelog(vsn) do
+    case System.cmd("git", ["cliff", "--tag", vsn, "-o", "CHANGELOG.md"], stderr_to_stdout: true) do
+      {_, 0} -> IO.puts("Updated CHANGELOG.md with #{vsn}")
+      {out, _} -> {:error, "Could not update CHANGELOG.md:\n\n #{out}"}
+    end
   end
 end
