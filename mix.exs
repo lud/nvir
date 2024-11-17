@@ -95,10 +95,10 @@ defmodule Nvir.MixProject do
 
   def update_readme(vsn) do
     version = Version.parse!(vsn)
-    readme_vsn = "#{version.major}.#{version.minor}"
+    readme_vsn = "#{version.major}.#{version.minor}" |> dbg()
     readme = File.read!("README.md")
-    re = ~r/:cli_mate, "~> \d+\.\d+"/
-    readme = String.replace(readme, re, ":cli_mate, \"~> #{readme_vsn}\"")
+    re = ~r/:nvir, "~> \d+\.\d+"/
+    readme = String.replace(readme, re, ":nvir, \"~> #{readme_vsn}\"")
     File.write!("README.md", readme)
     :ok
   end
