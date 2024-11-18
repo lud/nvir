@@ -602,6 +602,13 @@ defmodule NvirTest do
       assert 1234 = Nvir.env!("SOME_INT", :integer)
     end
 
+    test "defaults to string" do
+      put_key("SOME_INT", "1234")
+      put_key("SOME_STR", "")
+      assert "1234" = Nvir.env!("SOME_INT")
+      assert "" = Nvir.env!("SOME_STR")
+    end
+
     test "invalid" do
       put_key("SOME_INT", "not an int")
 

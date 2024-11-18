@@ -221,7 +221,7 @@ defmodule Nvir do
 
   Please see the [README](README.md#available-casters) for available casters.
   """
-  def env!(var, caster) do
+  def env!(var, caster \\ :string) do
     case env(var, caster) do
       {:ok, value} -> value
       {:error, reason} -> raise reason
