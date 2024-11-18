@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.3] - 2024-11-18
+
+### 🚀 Features
+
+- Default caster is :string
+
 ## [0.9.2] - 2024-11-17
 
 ### 📚 Documentation
