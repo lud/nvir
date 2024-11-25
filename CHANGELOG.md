@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.4] - 2024-11-25
+
+### 🐛 Bug Fixes
+
+- Support old Elixir versions
+
 ## [0.9.3] - 2024-11-18
 
 ### 🚀 Features
