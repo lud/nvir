@@ -470,8 +470,10 @@ defmodule Nvir.Parser do
          buffer(text: text, line: line, column: column) = buf,
          <<_, _::binary>> = str
        ) do
+    size = byte_size(str)
+
     case text do
-      <<^str::binary, rest::binary>> ->
+      <<^str::binary-size(size), rest::binary>> ->
         {line, column} = next_cursor(str, line, column)
         {:ok, buffer(buf, rest, line, column)}
 
