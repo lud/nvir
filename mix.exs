@@ -56,7 +56,7 @@ defmodule Nvir.MixProject do
       # Checks
       {:ex_check, "~> 0.16.0", only: [:dev, :test], runtime: false},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22.0", only: :dev, runtime: false}
     ]
