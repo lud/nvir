@@ -35,7 +35,7 @@ jobs:
           - elixir: 1.16.3
             otp: 27.1.2
 
-    name: "Test, Verify - ${{matrix.elixir}}-otp-${{matrix.otp}}"
+    name: "Test ${{matrix.elixir}}-otp-${{matrix.otp}}"
 
     steps:
       - uses: actions/checkout@v4
