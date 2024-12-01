@@ -80,6 +80,12 @@ defmodule Nvir.MixProject do
     ]
   end
 
+  def cli do
+    [
+      preferred_envs: [dialyzer: :test]
+    ]
+  end
+
   defp versioning do
     [
       annotate: true,
