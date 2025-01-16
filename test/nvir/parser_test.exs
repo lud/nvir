@@ -1,4 +1,5 @@
 defmodule Nvir.ParserTest do
+  alias Nvir.Parser.ParseError
   use ExUnit.Case, async: false
 
   doctest Nvir.Parser
@@ -35,6 +36,40 @@ defmodule Nvir.ParserTest do
 
 
              """)
+  end
+
+  test "doc test" do
+    env = """
+    WHO=World
+    GREETING=Hello $WHO!
+    """
+
+    expected =
+      {:ok,
+       [
+         {"WHO", "World"},
+         {"GREETING", ["Hello ", {:var, "WHO"}, "!"]}
+       ]}
+
+    assert expected == parse(env)
+  end
+
+  test "doc test self interpolate" do
+    env = """
+    PATH=b
+    PATH=$PATH:c
+    PATH=a:$PATH
+    """
+
+    expected =
+      {:ok,
+       [
+         {"PATH", "b"},
+         {"PATH", [{:var, "PATH"}, ":c"]},
+         {"PATH", ["a:", {:var, "PATH"}]}
+       ]}
+
+    assert expected == parse(env)
   end
 
   test "can parse a simple line" do
@@ -379,11 +414,11 @@ defmodule Nvir.ParserTest do
                NODELIM=hello $WHO
                """)
 
-      assert is_function(enclosed, 1)
-      assert is_function(nodelim, 1)
+      assert ["hello ", {:var, "WHO"}] == enclosed
+      assert ["hello ", {:var, "WHO"}] == nodelim
 
-      assert "hello world" = enclosed.(fn "WHO" -> "world" end)
-      assert "hello world" = nodelim.(fn "WHO" -> "world" end)
+      assert "hello world" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "in double quoted value" do
@@ -393,11 +428,11 @@ defmodule Nvir.ParserTest do
                NODELIM="hello $WHO"
                """)
 
-      assert is_function(enclosed, 1)
-      assert is_function(nodelim, 1)
+      assert ["hello ", {:var, "WHO"}] = enclosed
+      assert ["hello ", {:var, "WHO"}] = nodelim
 
-      assert "hello world" = enclosed.(fn "WHO" -> "world" end)
-      assert "hello world" = nodelim.(fn "WHO" -> "world" end)
+      assert "hello world" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "in double quoted multiline" do
@@ -411,11 +446,11 @@ defmodule Nvir.ParserTest do
                """
                ''')
 
-      assert is_function(enclosed, 1)
-      assert is_function(nodelim, 1)
+      assert ["hello ", {:var, "WHO"}, "\n"] == enclosed
+      assert ["hello ", {:var, "WHO"}, "\n"] == nodelim
 
-      assert "hello world\n" = enclosed.(fn "WHO" -> "world" end)
-      assert "hello world\n" = nodelim.(fn "WHO" -> "world" end)
+      assert "hello world\n" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world\n" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "double quoted multiline whole line" do
@@ -429,11 +464,11 @@ defmodule Nvir.ParserTest do
                """
                ''')
 
-      assert is_function(enclosed, 1)
-      assert is_function(nodelim, 1)
+      assert [{:var, "WHO"}, "\n"] == enclosed
+      assert [{:var, "WHO"}, "\n"] == nodelim
 
-      assert "world\n" = enclosed.(fn "WHO" -> "world" end)
-      assert "world\n" = nodelim.(fn "WHO" -> "world" end)
+      assert "world\n" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "world\n" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "in single quoted, no interpolation" do
@@ -456,94 +491,94 @@ defmodule Nvir.ParserTest do
                """)
     end
 
-    defp callmsg(map, vars) do
-      Map.fetch!(map, "MSG").(fn key -> Map.get(vars, key, "") end)
+    defp build_sentence(map, vars) do
+      Nvir.interpolate_var(Map.fetch!(map, "SENTENCE"), fn key -> Map.get(vars, key, "") end)
     end
 
     test "edge case - vars on both ends" do
       # test for removing empty chunks
       assert "hello world" =
-               "MSG=$GREETING $WHO"
+               "SENTENCE=$GREETING $WHO"
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "hello world" =
-               ~s(MSG="$GREETING $WHO")
+               ~s(SENTENCE="$GREETING $WHO")
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
     test "var touching comment, still included in the values just like raw files" do
       assert "world#this is a comment" =
-               "MSG=$WHO#this is a comment"
+               "SENTENCE=$WHO#this is a comment"
                |> parse_map!()
-               |> callmsg(%{"WHO" => "world"})
+               |> build_sentence(%{"WHO" => "world"})
 
       # If the comment is spaces, it is not included in the value
       assert "world" =
-               "MSG=$WHO #this is a comment"
+               "SENTENCE=$WHO #this is a comment"
                |> parse_map!()
-               |> callmsg(%{"WHO" => "world"})
+               |> build_sentence(%{"WHO" => "world"})
 
       # Quotes protect comments from touching
       assert "world" =
-               ~s(MSG="$WHO"#this is a comment)
+               ~s(SENTENCE="$WHO"#this is a comment)
                |> parse_map!()
-               |> callmsg(%{"WHO" => "world"})
+               |> build_sentence(%{"WHO" => "world"})
 
       # Enclosing does not
       assert "world#this is a comment" =
-               "MSG=${WHO}#this is a comment"
+               "SENTENCE=${WHO}#this is a comment"
                |> parse_map!()
-               |> callmsg(%{"WHO" => "world"})
+               |> build_sentence(%{"WHO" => "world"})
     end
 
     test "edge case - vars touching" do
       assert "helloworld" =
-               "MSG=$GREETING$WHO"
+               "SENTENCE=$GREETING$WHO"
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "helloworld" =
-               ~s(MSG="$GREETING$WHO")
+               ~s(SENTENCE="$GREETING$WHO")
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
     test "edge case - enclosed vars touching" do
       assert "helloworld" =
-               "MSG=${GREETING}${WHO}"
+               "SENTENCE=${GREETING}${WHO}"
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "helloworld" =
-               ~s(MSG="${GREETING}${WHO}")
+               ~s(SENTENCE="${GREETING}${WHO}")
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello", "WHO" => "world"})
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
     test "edge case - vars and dollar" do
       assert "$hello" =
-               "MSG=$$GREETING"
+               "SENTENCE=$$GREETING"
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello"})
+               |> build_sentence(%{"GREETING" => "hello"})
 
       assert "$hello" =
-               ~s(MSG="$$GREETING")
+               ~s(SENTENCE="$$GREETING")
                |> parse_map!()
-               |> callmsg(%{"GREETING" => "hello"})
+               |> build_sentence(%{"GREETING" => "hello"})
     end
 
     test "edge case - empty enclosure" do
       assert "no---space" =
-               "MSG=no${}space"
+               "SENTENCE=no${}space"
                |> parse_map!()
-               |> callmsg(%{"" => "---"})
+               |> build_sentence(%{"" => "---"})
 
       assert "no---space" =
-               ~s(MSG="no${}space")
+               ~s(SENTENCE="no${}space")
                |> parse_map!()
-               |> callmsg(%{"" => "---"})
+               |> build_sentence(%{"" => "---"})
     end
   end
 
@@ -561,7 +596,7 @@ defmodule Nvir.ParserTest do
                B="""
                ''')
 
-      assert %Nvir.ParseError{line: 3} = parse_error
+      assert %ParseError{line: 3} = parse_error
 
       valid_parse_error!(parse_error)
     end

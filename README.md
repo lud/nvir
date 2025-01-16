@@ -1,12 +1,40 @@
-# Nvir
+# Nvir [![Hex.pm Version](https://img.shields.io/hexpm/v/nvir?color=4e2a8e)](https://hex.pm/packages/nvir) [![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/lud/nvir/elixir.yaml?label=CI)](https://github.com/lud/nvir/actions/workflows/elixir.yaml)
 
-Easy environment variables and Dotenv implementation for Elixir.
+An easy dotenv implementation for Elixir that provides:
 
-This library helps to load your "dotenv" files easily and provides validation
-for environment variables.
+* Simple loading of `.env` files with support for inheritance and interpolation.
+* Strong validation and type casting of environment variables.
+* Environment specific configuration.
 
-It is a fork of [Dotenvy](https://github.com/fireproofsocks/dotenvy) that uses
-the predefined system environment variables by default.
+This library is heavily inspired from
+[Dotenvy](https://github.com/fireproofsocks/dotenvy) and provides a similar
+experience.
+
+
+
+- [Installation](#installation)
+- [Basic Usage](#basic-usage)
+- [File loading](#file-loading)
+  - [Defining the sources](#defining-the-sources)
+  - [Overwrite mechanics](#overwrite-mechanics)
+  - [File load order](#file-load-order)
+  - [Custom loaders](#custom-loaders)
+- [The `env!` functions](#the-env-functions)
+  - [Requiring a variable](#requiring-a-variable)
+  - [Default values](#default-values)
+  - [Available Casters](#available-casters)
+  - [Custom Casters](#custom-casters)
+- [Dotenv File Syntax Cheatsheet](#dotenv-file-syntax-cheatsheet)
+  - [Basic Syntax](#basic-syntax)
+  - [Comments](#comments)
+  - [Quoted Values](#quoted-values)
+  - [Multiline Strings](#multiline-strings)
+  - [Variable Interpolation](#variable-interpolation)
+- [Environment Files Inheritance](#environment-files-inheritance)
+  - [Rules for regular files](#rules-for-regular-files)
+  - [Examples](#examples)
+  - [Important Edge Case](#important-edge-case)
+  - [Rules for overwrite files](#rules-for-overwrite-files)
 
 
 
@@ -21,7 +49,6 @@ def deps do
   ]
 end
 ```
-
 
 
 ## Basic Usage
@@ -46,76 +73,35 @@ dotenv!([".env", ".env.#{config_env()}"])
 
 # Configure your different services with the env!/2 and env!/3 functions.
 config :my_app, MyAppWeb.Endpoint,
+  # expect values to exist
   secret_key_base: env!("SECRET_KEY_BASE", :string!),
-  url: [host: env!("HOST", :string!), port: 443, scheme: "https"]
-
-config :my_app, MyApp.Repo,
-  username: env!("DB_USERNAME", :string!),
-  password: env!("DB_PASSWORD", :string!),
-  database: env!("DB_DATABASE", :string!),
-  # You can provide default values with env!/3
-  hostname: env!("DB_HOSTNAME", :string!, "localhost"),
-  port: env!("DB_PORT", :integer, 5432),
-  pool_size: env!("POOL_SIZE", :integer, 10),
-  queue_target: env!("REPO_QUEUE_TARGET", :integer, 50),
-  queue_interval: env!("REPO_QUEUE_INTERVAL", :integer, 5000)
-
-config :my_app, Oban,
-  queues: [
-    emailing: env!("EMAILING_QUEUE_CONCURRENCY", :integer, 10),
-  ]
+  url: [host: env!("HOST", :string!), port: 443, scheme: "https"],
+  # or provide a sane default
+  http: [ip: {0, 0, 0, 0}, port: env!("PORT", :integer!, 4000)]
 ```
 
 This is most of what you need to know to start using this library. Below is an
 advanced guide that covers all configuration and usage options.
 
-## Table of contents
 
-- [Installation](#installation)
-- [Basic Usage](#basic-usage)
-- [Table of contents](#table-of-contents)
-- [Loading files](#loading-files)
-  - [Single file](#single-file)
-  - [A list of files](#a-list-of-files)
-  - [Per environment files](#per-environment-files)
-- [The `env!` functions](#the-env-functions)
-  - [Requiring a variable](#requiring-a-variable)
-  - [Default values](#default-values)
-  - [Available Casters](#available-casters)
-  - [Custom Casters](#custom-casters)
-- [Overriding system variables](#overriding-system-variables)
-  - [File load order with overrides](#file-load-order-with-overrides)
-- [Mix Config environments](#mix-config-environments)
-  - [Defining the current environment](#defining-the-current-environment)
-- [Dotenv File Syntax Cheatsheet](#dotenv-file-syntax-cheatsheet)
-  - [Basic Syntax](#basic-syntax)
-  - [Comments](#comments)
-  - [Quoted Values](#quoted-values)
-  - [Multiline Strings](#multiline-strings)
-  - [Variable Interpolation](#variable-interpolation)
-- [Environment Files Inheritance](#environment-files-inheritance)
-  - [Rules for regular files](#rules-for-regular-files)
-  - [Examples](#examples)
-  - [Important Edge Case](#important-edge-case)
-  - [Rules for override files](#rules-for-override-files)
+## File loading
+
+### Defining the sources
+
+The `dotenv!/1` function accepts paths to files, either absolute or relative to
+`File.cwd!()` (which points to your app root where `mix.exs` is present).
+
+There are different possible ways to chose the files to load.
 
 
-
-## Loading files
-
-The `dotenv!/1` function accepts paths to files, either absolute or relative to `File.cwd!()` (which points to your app root where `mix.exs` is present).
-
-There are different possible ways to chose what file to load.
-
-### Single file
-
-The classic dotenv experience.
+#### The classic dotenv experience
 
 ```elixir
 dotenv!(".env")
 ```
 
-### A list of files
+
+#### A list of sources
 
 Non-existing files are safely ignored.  Your `.env` file will likely
 not be present in production, and you may have a `.env.test` file but no
@@ -125,52 +111,212 @@ not be present in production, and you may have a `.env.test` file but no
 dotenv!([".env", ".env.#{config_env()}"])
 ```
 
-Files are loaded in order. If a value is present in multiple files, the last
-file wins.
 
-The `config_env()` function is provided by `import Config` at the top of your config files.
+#### Tagged sources
 
-### Per environment files
+It is possible to wrap the sources in tagged tuples, to limit the loading of
+the sources to certain conditions:
 
-When files are listed in a keyword list, the file is only loaded if the key matches the current environment.
-
-This gives you more control on the files that are loaded, and ensures that no
-file will be loaded in production if the env files are committed to git and/or
-included in your releases.
+In this example, a different file is loaded depending on the current
+`Config.config_env()`.
 
 ```elixir
 dotenv!(
   dev: ".env",
-  test: [".env", ".env.test"]
+  test: ".env.test"
 )
 ```
 
-As you can see, keyword values can themselves be lists or strings. The files are
-loaded in order of appearance (as long as the environment matches). Just as
-above, when a variable is defined in multiple files, the latter file has the
-final say on a variable's value.
+This gives you more control on the files that are loaded, and ensures that no
+file will be loaded in production if the env files are committed to git by
+mistake and/or included in your releases.
 
-It is also possible to pass the same key multiple times.
+Refer to the documentation of `Nvir.dotenv!/1` to know the default enabled tags.
 
-Files under a `:*` key are always loaded, regardless of the current
-environment. That key is mostly a syntax tool, as `["a", key: "b"]` is valid
-Elixir syntax, but `[key: "a", "b"]` is not.
 
-A wildcard key allows a file to be loaded in any environment:
+#### Mixing it all together
 
-```elixir
-dotenv!(*: ".env", test: ".env.test")
+Tagged tuples and lists do not have to contain a single file. They can also
+contain other valid sources, that is, nested lists or tuples.
 
-# Equivalent to
-dotenv!([".env", test: ".env.test"])
-```
-
-The following are **not** equivalent, as it changes the order of the files:
+For instance, here in `:test` environment we will load two files, plus an
+additional file if the `:ci` tag is enabled.
 
 ```elixir
-dotenv!(*: ".env", dev: ".env.dev")
-dotenv!(dev: ".env.dev", *: ".env")
+dotenv!(
+  dev: ".env",
+  test: [".env", ".env.test", ci: ".env.ci"]
+)
 ```
+
+It is also possible to pass the same key multiple times:
+
+```elixir
+dotenv!([
+  test: ".env.test",
+  ci: ".env.ci",
+  test: ".env.test.extra"
+])
+```
+
+### Overwrite mechanics
+
+The files loaded by this library will not replace variables already defined in
+the real environment.
+
+That is, as your `HOME` variable already exists, defining `HOME=/somewhere/else`
+in and `.env` file will have no effect.
+
+A special tag can be given to `dotenv!/1` to overwrite system variables:
+
+```elixir
+dotenv!([".env", overwrite: ".env.local"])
+```
+
+With the code above, any variable from `.env` that does not already exists will
+be added to the system env, but _all_ variables from `.env.local` will be set.
+
+Just like environment specific keys, the `:overwrite` key accepts any nested
+source types. The following forms are equivalent:
+
+```elixir
+dotenv!(
+  dev: [".env.dev", overwrite: ".env.local.dev"],
+  test: [".env.test", overwrite: ".env.local.test"]
+)
+
+dotenv!(
+  dev: ".env.dev",
+  test: ".env.test",
+  overwrite: [dev: ".env.local.dev", test: ".env.local.test"]
+)
+```
+
+In `:dev` environment, the two snippets above would both result in loading
+`".env.dev"` then `".env.local.dev"`.
+
+The first level of `:overwrite` will determine which group a file belongs to.
+Nesting `:overwrite` tags has no effect. In the following snippet, all files
+except `1.env` are overwrite files.
+
+```elixir
+dotenv!(
+  dev: "1.env",
+  overwrite: ["2.env", dev: ["3.env", overwrite: "4.env"]]
+)
+```
+
+The `3.env` file is wrapped in an `:overwrite` tag, indirectly.
+
+
+### File load order
+
+The `dotenv!/1` function follows a couple rules when loading the different
+sources:
+
+* Files are separated in two groups, "regular" and "overwrites".
+* Within each group, files are always loaded in order of appearance. This is
+  important for files that reuse variables defined in previous files.
+* The "regular" group is loaded first. The files from the "overwrite" group will
+  see the variables defined by the "regular" group.
+
+The order of execution is the following:
+
+* Load all regular files in order.
+* Patch system environment with non-existing keys.
+* Load all overwrite files in order.
+* Overwrite system environment with all their values.
+
+This means that the following expression will **not** load and apply
+`.env.local` first because it belongs to the "overwrite" group, which is applied
+last. But `.env1` will always be loaded before `.env2`.
+
+```elixir
+dotenv!(overwrite: ".env.local", dev: ".env1", dev: ".env2")
+```
+
+
+### Custom loaders
+
+It is possible to customize the way the files are loaded. The order of the files
+is deterministic and cannot be changed, but options exist to change how they are
+loaded.
+
+
+#### Using a custom loader
+
+The simple way is to start from the default loader and change its properties:
+
+```elixir
+# runtime.exs
+import Config
+import Nvir
+
+dotenv_loader()
+|> enable_sources(:docs, config_env() == "docs")
+|> enable_sources(:release, env!("RELEASE_NAME", :boolean, false))
+|> dotenv_configure(cd: "/app/release/env")
+|> dotenv!(
+  dev: ".env",
+  test: ".env.test",
+  docs: ".env.docs",
+  release: "/var/release.env"
+)
+```
+
+In the example above, we will enable the `:docs` and `:ci` tag when the defined
+conditions are met.
+
+Plus, we changed the directory where the .env files are loaded from. This will
+not affect the `/var/release.env` file since it's an absolute path.
+
+Please refer to the documentation of `dotenv_configure/2` to learn more about
+the available options.
+
+#### Disabling default tags
+
+It is also possible to redefine predefined tags. Here we replace the `:test` tag
+with a possibly different boolean value.
+
+```elixir
+# runtime.exs
+import Config
+import Nvir
+
+dotenv_loader()
+|> enable_sources(:test, config_env() == :test and MyApp.some_custom_check())
+|> dotenv!(
+  dev: ".env",
+  test: ".env.test"
+)
+```
+
+The `:overwrite` tag cannot be changed, as it is handled separately from other
+tags.
+
+
+#### Disable all tags by default
+
+Use `dotenv_new()` instead of `dotenv_loader()` to get an empty loader without
+any enabled tag.
+
+
+#### Use a custom parser
+
+If you want to parse the .env files yourself, or add support for other file
+formats, pass an implementation of the `Nvir.Parser` behaviour as the `:parser`
+option:
+
+```elixir
+# runtime.exs
+import Config
+import Nvir
+
+dotenv_new()
+|> dotenv_configure(parser: MyApp.YamlEnvParser)
+|> dotenv!("priv/dev-env.yaml")
+```
+
 
 
 ## The `env!` functions
@@ -293,89 +439,6 @@ env!("PORT", fn value ->
 end)
 ```
 
-
-
-## Overriding system variables
-
-The files loaded by this library will not overwrite already existing variables. That is, as your `HOME` variable already exists, defining `HOME=/somewhere/else` in your `.env` file will have no effect.
-
-Another special key can be given to `dotenv!/1` to override system variables:
-
-```elixir
-dotenv!([".env", override: ".env.local"])
-
-# load more files
-dotenv!([".env", override: [".env.local", ".env.local.#{config_env()}"]])
-```
-
-With the code above, any variable from `.env` that does not already exists will be added to the system env, but _all_ variables from `.env.local` will be set.
-
-Just like environment specific keys, the `:override` key accepts strings or
-lists, and the lists may contain environments too. The following forms are
-equivalent:
-
-```elixir
-dotenv!(
-  *: [".env", override: ".env.local"],
-  dev: [".env.dev", override: ".env.local.dev"],
-  test: [".env.test", override: ".env.local.test"]
-)
-
-dotenv!(
-  *: ".env",
-  dev: ".env.dev",
-  test: ".env.test",
-  override: [*: ".env.local", dev: ".env.local.dev", test: ".env.local.test"]
-)
-```
-
-The `:*` key applies to all environments, and the files belong to the same group
-as files under a `:dev` or `:test` key. The final file in order still has the
-final say for a variable.
-
-The two snippets above would both result in loading `".env"` and `".env.dev"` as regular files, and then `".env.local"` and `".env.local.dev"` as overrides, in those orders.
-
-### File load order with overrides
-
-Regular and override files are separated into two groups. As stated earlier,
-each group files are loaded in order of appearance, but all files from the
-regular files group are applied before loading the override files.
-
-The `dotenv/1` function will do the following:
-
-* Load all regular files in order.
-* Patch system environment with non-existing keys.
-* Load all override files in order.
-* Overwrite system environment with all their values.
-
-This means that the following expression will not load and apply `.env.local`
-before `.env` because they do not belong to the same group, and the `:override`
-group is applied last.
-
-```elixir
-dotenv!(override: ".env.local", dev: ".env")
-```
-
-## Mix Config environments
-
-The list of possible environment names is not predefined. You can pass any key and the files will be loaded if that key matches the current environment.
-
-So for instance it is possible to list files under a `:prod` key, while not recommended.
-
-Some projects use a dedicated environment for CI, so a custom `:ci` key can be used in this case.
-
-### Defining the current environment
-
-The current environment that will match the keys given to `dotenv!/1` is the
-value of `config_env()` when called from a config file. Otherwise it is set to
-the value of `Mix.env()`.
-
-It is not recommended to call `dotenv!/1` directly from modules at runtime
-because the current environment will be undefined in a production release.
-`dotenv!/1` belongs to `runtime.exs`.
-
-
-
 ## Dotenv File Syntax Cheatsheet
 
 ### Basic Syntax
@@ -393,6 +456,11 @@ EMPTY=''
 
 # The parser will ignore an "export" prefix
 export KEY=value
+
+# Interpolation with previously defined variable
+PATH=/usr/bin
+PATH=$PATH:/home/alice/bin
+PATH=/usr/local/bin:$PATH
 ```
 
 ### Comments
@@ -494,26 +562,27 @@ MSG=$GREETING # Actual comment
 
 ### Rules for regular files
 
-These rules apply to the regular group. Override files will always have their values added to system environment.
+These rules apply to the regular group. Overwrite files will always have their
+values added to system environment.
 
-1. System environment variables always take precedence over env files
-2. Multiple env files can be loaded in sequence, with later files overriding
+1. System environment variables always take precedence over env files.
+2. Multiple env files can be loaded in sequence, with later files overwriting
    earlier ones
 3. Variable interpolation (`$VAR`) uses values from the system first, then from
-   the most recently defined value
+   the most recently defined value.
 
 ### Examples
 
 ```elixir
 # System state:
-# WHO=moon
+# WHO=world
 
 # .env
-WHO=world
-HELLO=hello $WHO   # Will use WHO=moon from system
+WHO=moon
+HELLO=hello $WHO   # Will use WHO=world from system since we are not overwriting
 
 # Result:
-# HELLO=hello moon
+# HELLO=hello world
 ```
 
 With multiple files, we use the latest value. In this exemple the variable is
@@ -525,20 +594,25 @@ WHO=world
 
 # .env.dev
 WHO=mars
-HELLO=hello $WHO
+HELLO=hello $WHO # This defines HELLO=hello mars
 
 # .env.dev.2
 WHO=moon
-HELLO=hello $WHO
+HELLO=hello $WHO # this defines HELLO=hello moon
 
-# Loading order: .env -> .env.dev -> .env.dev.2
-# Result:
+# With loading order of .env, .env.dev, .env.dev.2
+# we will have the following:
 # WHO=moon
 # HELLO=hello moon
 ```
 
+So, "regular" files do not overwrite the system environment, but they act as a
+group and overwrite themselves as if they were a single file.
+
 ### Important Edge Case
-When a variable using interpolation is not redefined in subsequent files, it keeps using the value from when it was defined.
+
+When a variable using interpolation is not redefined in subsequent files, it
+keeps using the value from when it was defined.
 
 ```elixir
 # .env
@@ -557,11 +631,12 @@ WHO=moon           # WHO is updated, but HELLO keeps its value
 # HELLO=hello mars  # Not "hello moon"!
 ```
 
-This may cause inconsistencies if you code depends on the values of both `HELLO` and `WHO`.
+This may cause inconsistencies if you code depends on the values of both `HELLO`
+and `WHO`.
 
-### Rules for override files
+### Rules for overwrite files
 
-Override files follow the same logic, each file overrides the previous ones.
+Overwrite files follow the same logic, each file overwrites the previous ones.
 
 The only difference is that the values in the files take precedence over any
 preexisting variable in the system environment.

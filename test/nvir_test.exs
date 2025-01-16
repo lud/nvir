@@ -1,6 +1,8 @@
 defmodule NvirTest do
   use ExUnit.Case, async: false
 
+  doctest Nvir
+
   setup do
     before_keys = Enum.sort(Map.keys(System.get_env()))
 
@@ -25,22 +27,58 @@ defmodule NvirTest do
     end)
   end
 
+  defp match_env(env) do
+    Nvir.enable_sources(Nvir.dotenv_new(), env, true)
+  end
+
+  describe "dotenv loaders" do
+    test "empty loader" do
+      assert %Nvir{enabled_sources: %{}} == Nvir.dotenv_new()
+    end
+
+    test "default loader should have test environment enabled" do
+      # Because we are in a test here
+      assert %{test: true} = Nvir.dotenv_loader().enabled_sources
+    end
+
+    test "default loader should have * environment enabled" do
+      # Because it is always on
+      assert %{*: true} = Nvir.dotenv_loader().enabled_sources
+    end
+
+    test "the configuration is validated" do
+      # Not a boolean value
+      assert_raise ArgumentError, fn ->
+        Nvir.dotenv_configure(Nvir.dotenv_loader(),
+          enabled_sources: %{docs: :not_a_boolean}
+        )
+      end
+
+      # Not an atom key
+      assert_raise ArgumentError, fn ->
+        Nvir.dotenv_configure(Nvir.dotenv_loader(),
+          enabled_sources: %{"docs" => true}
+        )
+      end
+    end
+  end
+
   describe "collection of sources" do
     test "empty sources" do
-      assert {[], []} = Nvir.env_sources(:abc, [])
+      assert {[], []} = Nvir.collect_sources(match_env(:abc), [])
     end
 
     test "file source" do
-      assert {["some.env"], []} = Nvir.env_sources(:abc, "some.env")
+      assert {["some.env"], []} = Nvir.collect_sources(match_env(:abc), "some.env")
     end
 
     test "file list source" do
-      assert {["1.env", "2.env"], []} = Nvir.env_sources(:abc, ["1.env", "2.env"])
+      assert {["1.env", "2.env"], []} = Nvir.collect_sources(match_env(:abc), ["1.env", "2.env"])
     end
 
     test "collect from env only" do
       assert {[1, 2, 3, 4], []} =
-               Nvir.env_sources(:abc,
+               Nvir.collect_sources(match_env(:abc),
                  abc: [1],
                  abc: 2,
                  other: [0, 0, 0],
@@ -51,7 +89,7 @@ defmodule NvirTest do
 
     test "collect from env and all" do
       assert {[1, 2, 3, 4], []} =
-               Nvir.env_sources(:abc,
+               Nvir.collect_sources(match_env(:abc),
                  abc: [1],
                  *: [2, abc: 3],
                  *: [other: 0],
@@ -60,32 +98,47 @@ defmodule NvirTest do
                )
     end
 
-    test "collect basic overrides" do
-      assert {[], [101]} = Nvir.env_sources(:abc, override: 101)
-      assert {[], [101]} = Nvir.env_sources(:abc, override: [101])
+    test "collect basic overwrites" do
+      assert {[], [101]} = Nvir.collect_sources(match_env(:abc), overwrite: 101)
+      assert {[], [101]} = Nvir.collect_sources(match_env(:abc), overwrite: [101])
+      assert {[], [101, 102]} = Nvir.collect_sources(match_env(:abc), overwrite: [101, 102])
+
+      assert {[], [101, 102]} =
+               Nvir.collect_sources(match_env(:abc),
+                 overwrite: [overwrite: [[overwrite: [[101, overwrite: 102]]]]]
+               )
     end
 
-    test "overrides and normal" do
+    test "overwrites and normal" do
       assert {[1], [101]} =
-               Nvir.env_sources(:abc, override: [101], abc: 1)
+               Nvir.collect_sources(match_env(:abc), overwrite: [101], abc: 1)
 
       assert {[1], [101, 102]} =
-               Nvir.env_sources(:abc, override: [101], abc: 1, override: 102)
+               Nvir.collect_sources(match_env(:abc), overwrite: [101], abc: 1, overwrite: 102)
     end
 
-    test "overrides with env" do
+    test "overwrites with env" do
+      # We enable the :overwrite tag. This is invalid, but we must ensure that
+      # the overwrite are removed from the regular sources even if the tag can be
+      # matched.
+
       assert {[1, 2], [1001, 1002, 1003, 1004, 1005]} =
-               Nvir.env_sources(
-                 :abc,
-                 [
-                   1,
-                   override: [1001, abc: [1002]],
-                   abc: [2, override: [1003, other: -1]],
-                   other: [override: -2, abc: -3],
-                   abc: [override: [abc: 1004, other: -4]],
-                   *: [override: [abc: 1005, other: -5]]
-                 ]
-               )
+               Nvir.collect_sources(%Nvir{enabled_sources: %{overwrite: true, abc: true}}, [
+                 1,
+                 overwrite: [1001, abc: [1002]],
+                 abc: [2, overwrite: [1003, other: -1]],
+                 other: [overwrite: -2, abc: -3],
+                 abc: [overwrite: [abc: 1004, other: -4]],
+                 *: [overwrite: [abc: 1005, other: -5]]
+               ])
+    end
+
+    test "odd cases" do
+      # nested tuples
+      assert {[1], _} = Nvir.collect_sources(match_env(:abc), {:abc, {:abc, {:abc, 1}}})
+
+      # lists without tags
+      assert {[1, 2], _} = Nvir.collect_sources(match_env(:abc), [[[[[1]]]], [[[[[2]]]]]])
     end
   end
 
@@ -114,7 +167,11 @@ defmodule NvirTest do
   end
 
   defp create_file(contents) do
-    path = Briefly.create!()
+    # use a different directory for all files to better test relative/absolute
+    # paths.
+    dir = Briefly.create!(type: :directory)
+    filename = "nvir-test.env"
+    path = Path.join(dir, filename)
     File.write!(path, contents)
     path
   end
@@ -174,11 +231,11 @@ defmodule NvirTest do
       assert "var1 in test" = System.fetch_env!("SOME_VAR1")
       assert "var2 in test" = System.fetch_env!("SOME_VAR2")
 
-      # No override though
+      # No overwrite though
       assert "yes!" = System.fetch_env!("EXISTING")
     end
 
-    test "the files override themselves" do
+    test "the files overwrite themselves" do
       # One key will not exist
       _ = delete_key("REDEFINED")
       _ = delete_key("ONLY_1")
@@ -211,7 +268,7 @@ defmodule NvirTest do
       assert "already set" = System.fetch_env!("EXISTING")
     end
 
-    test "it is possible to override system env" do
+    test "it is possible to overwrite system env" do
       # One key will not exist
       _ = delete_key("REDEFINED")
       _ = delete_key("ONLY_1")
@@ -302,7 +359,7 @@ defmodule NvirTest do
         Nvir.dotenv!(
           dev: [dev_file_1, dev_file_2],
           test: [test_file_1, test_file_2],
-          override: [test: [test_ovr_1, test_ovr_2], dev: [dev_ovr_1, dev_ovr_2]]
+          overwrite: [test: [test_ovr_1, test_ovr_2], dev: [dev_ovr_1, dev_ovr_2]]
         )
 
       assert "in test file 2" = System.fetch_env!("REDEFINED")
@@ -414,7 +471,7 @@ defmodule NvirTest do
         """)
 
       assert %{"ADDED" => _} =
-               Nvir.dotenv!(["f1", test: "f2", test: ["f3"], *: [override: "f4"], *: real_file])
+               Nvir.dotenv!(["f1", test: "f2", test: ["f3"], *: [overwrite: "f4"], *: real_file])
 
       assert "in real file" = System.fetch_env!("ADDED")
     end
@@ -425,7 +482,7 @@ defmodule NvirTest do
         A="""
         ''')
 
-      assert_raise Nvir.ParseError, fn -> Nvir.dotenv!(file) end
+      assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
     end
   end
 
@@ -460,7 +517,7 @@ defmodule NvirTest do
     end
 
     test "do not use interpolation of variable in the same file if preexisting" do
-      # This stands true for the regular group, not overrides
+      # This stands true for the regular group, not overwrites
       put_key("WHO", "moon")
       delete_key("HELLO")
 
@@ -556,7 +613,22 @@ defmodule NvirTest do
       assert "moon" = System.fetch_env!("WHO")
     end
 
-    test "with overrides" do
+    test "interpolate with same variable" do
+      delete_key("XPATH")
+
+      file =
+        create_file("""
+        XPATH=b
+        XPATH=$XPATH:c
+        XPATH=a:$XPATH
+        """)
+
+      assert %{"XPATH" => "a:b:c"} == Nvir.dotenv!(file)
+
+      assert "a:b:c" = System.fetch_env!("XPATH")
+    end
+
+    test "with overwrites" do
       put_key("WHO", "earth")
       put_key("HELLO", "greetings!")
       delete_key("NEW_KEY")
@@ -582,7 +654,7 @@ defmodule NvirTest do
         """)
 
       assert %{"HELLO" => "hello mars", "WHO" => "moon", "NEW_KEY" => "defined!"} ==
-               Nvir.dotenv!(override: [file_1, file_2, file_3])
+               Nvir.dotenv!(overwrite: [file_1, file_2, file_3])
 
       assert "hello mars" = System.fetch_env!("HELLO")
       assert "moon" = System.fetch_env!("WHO")
@@ -773,6 +845,134 @@ defmodule NvirTest do
 
       # bad caster will not be checked if we use the default
       assert 9999 = Nvir.env!("NON_EXISTING", :bad_caster, 9999)
+    end
+  end
+
+  describe "custom parser" do
+    test "configuring and using a custom parser" do
+      defmodule CustomParser do
+        @behaviour Nvir.Parser
+
+        @impl true
+        def parse_file(_) do
+          {:ok, [{"CUSTOM_PARSER_VAR", "stubbed"}]}
+        end
+      end
+
+      _ = delete_key("CUSTOM_PARSER_VAR")
+      assert :error = System.fetch_env("CUSTOM_PARSER_VAR")
+
+      file =
+        create_file("""
+        This file is not valid but
+        the parser will return
+        stubbed content
+        """)
+
+      assert %{"CUSTOM_PARSER_VAR" => _} =
+               Nvir.dotenv_new()
+               |> Nvir.dotenv_configure(parser: CustomParser)
+               |> Nvir.dotenv!(file)
+
+      assert "stubbed" = System.fetch_env!("CUSTOM_PARSER_VAR")
+    end
+
+    test "custom parser errors can produce a message" do
+      defmodule BadCustomParser do
+        @behaviour Nvir.Parser
+
+        @impl true
+        def parse_file(_) do
+          {:error, :a_raw_reason}
+        end
+      end
+
+      file = create_file("")
+
+      err =
+        catch_error(
+          Nvir.dotenv_new()
+          |> Nvir.dotenv_configure(parser: BadCustomParser)
+          |> Nvir.dotenv!(file)
+        )
+
+      assert Exception.message(err) =~ ":a_raw_reason"
+    end
+  end
+
+  describe "custom file location" do
+    test "using the :cd option" do
+      _ = delete_key("USING_CWD")
+
+      dir = Briefly.create!(directory: true)
+      filename = "some.env"
+
+      File.write(Path.join(dir, filename), """
+      USING_CWD=nope
+      """)
+
+      assert %{"USING_CWD" => "nope"} =
+               Nvir.dotenv_loader()
+               |> Nvir.dotenv_configure(cd: dir)
+               # passing the relative filename
+               |> Nvir.dotenv!(filename)
+
+      # ...they are now defined
+      assert "nope" = System.fetch_env!("USING_CWD")
+    end
+
+    test "using the :cd option with chardata" do
+      _ = delete_key("USING_CHARDATA")
+
+      dir = Briefly.create!(directory: true)
+      dir = [dir, "/", "nvir", ?-, ~c"test", "-with", ~c"char-", [?d, ?a, ?t, ?a]]
+      File.mkdir_p!(dir)
+
+      filename = "some.env"
+
+      File.write(Path.join(dir, filename), """
+      USING_CHARDATA=yes
+      """)
+
+      assert %{"USING_CHARDATA" => "yes"} =
+               Nvir.dotenv_loader()
+               |> Nvir.dotenv_configure(cd: dir)
+               # passing the relative filename
+               |> Nvir.dotenv!(filename)
+
+      # ...they are now defined
+      assert "yes" = System.fetch_env!("USING_CHARDATA")
+    end
+
+    test "using :cd with absolute paths" do
+      _ = delete_key("USING_CWD")
+      _ = delete_key("USING_ABS")
+
+      # use an absolute filename
+      abs_filename =
+        create_file("""
+        USING_ABS=yes
+        """)
+
+      # also use a relative file for this test
+      dir = Briefly.create!(directory: true)
+      rel_filename = "rel.env"
+
+      File.write(Path.join(dir, rel_filename), """
+      USING_CWD=nope
+      """)
+
+      # both files are not in the same directory
+      refute Path.dirname(abs_filename) == dir
+
+      assert %{"USING_CWD" => "nope", "USING_ABS" => "yes"} =
+               Nvir.dotenv_loader()
+               |> Nvir.dotenv_configure(cd: dir)
+               # passing the relative filename
+               |> Nvir.dotenv!([rel_filename, abs_filename])
+
+      # ...they are now defined
+      assert "nope" = System.fetch_env!("USING_CWD")
     end
   end
 end

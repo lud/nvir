@@ -24,9 +24,59 @@ defmodule Nvir.Parser do
   @type parser :: (buffer -> {:ok, term, buffer} | {:error, {atom, term, buffer()}})
   @type key :: String.t()
   @type value :: String.t()
-  @type template :: (resolver -> String.t())
-  @type resolver :: (String.t() -> String.t())
-  @type variable :: {key, value | template}
+  @type variable :: {key, binary | [binary | {:var, binary}]}
+
+  @doc """
+  Must rturn a list of variable definitions in a result tuple.
+
+  Variables definitions are defined as lists of `{key, value}` tuples where the
+  `value` is either a string or a list of string and `{:var, string}` tuples.
+
+  For instance, given this file content:
+
+  ```bash
+  # .env
+  WHO=World
+  GREETING=Hello $WHO!
+  ```
+
+  The `c:parse_file/1` callback should return the following:
+
+  ```elixir
+  {:ok,
+    [
+      {"WHO", "World"},
+      {"GREETING", ["Hello ", {:var, "WHO"}, "!"]}
+    ]}
+  ```
+
+  There is no need to handle different interpolation scenarios at the parser
+  level. This env file:
+
+  ```bash
+  PATH=b
+  PATH=$PATH:c
+  PATH=a:$PATH
+  ```
+
+  Should produce the following:
+
+  ```elixir
+  {:ok,
+    [
+      {"PATH", "b"},
+      {"PATH", [{:var, "PATH"}, ":c"]},
+      {"PATH", ["a:", {:var, "PATH"}]}
+    ]}
+  ```
+
+  Interpolation will be handled by `Nvir.dotenv!/1` when variables will be
+  applied.
+  """
+  @callback parse_file(path :: String.t()) ::
+              {:ok, [variable]} | {:error, Exception.t()}
+
+  @behaviour __MODULE__
 
   @spec expressions :: parser
   defp expressions do
@@ -161,12 +211,12 @@ defmodule Nvir.Parser do
   defp interpolation_variable do
     choice([
       sequence([char(?$), key(), lookahead_not(key_char())])
-      |> map(fn [_, key, _] -> {:getvar, List.to_string(key)} end),
+      |> map(fn [_, key, _] -> {:var, List.to_string(key)} end),
       sequence([char(?$), char(?{), key(), char(?})])
-      |> map(fn [_, _, key, _] -> {:getvar, List.to_string(key)} end),
+      |> map(fn [_, _, key, _] -> {:var, List.to_string(key)} end),
       # Empty key, for backward compatibility
       sequence([char(?$), char(?{), char(?})])
-      |> map(fn _ -> {:getvar, ""} end)
+      |> map(fn _ -> {:var, ""} end)
     ])
   end
 
@@ -494,15 +544,19 @@ defmodule Nvir.Parser do
 
   # -- Entrypoint -------------------------------------------------------------
 
-  @doc ~S"""
+  @impl true
+  def parse_file(path) do
+    parse(File.read!(path))
+  end
+
+  @doc """
   Returns a list of `{key, value}` for all variables in the given content.
 
-  This function only parses strings, and will not attempt to read from the given
-  `path`. The `path` variable is only useful to give more information when an
-  error is returned.
+  This function only parses strings, and will not attempt to read from a path.
 
-  Each returned value is either a string, or a function in the case of variable
-  interpolation. That function accepts a resolver calback that provides the
+  Each returned value is either a string, or a list of chunks that are either a
+  binary or a `{:var, name}` tuple. Those values can be used with
+  `Nvir.interpolate_var/2` by providing a resolver calback that returns the
   value of previous variables.
 
   ### Resolver example
@@ -513,7 +567,7 @@ defmodule Nvir.Parser do
       ...>   "INTRO" -> "Hello"
       ...>   "WHO" -> "World"
       ...> end
-      iex> template.(resolver)
+      iex> Nvir.interpolate_var(template, resolver)
       "Hello World!"
 
   When working with the system env you will likely use `&System.get_env(&1, "")`
@@ -521,8 +575,8 @@ defmodule Nvir.Parser do
   variables, but you can of course raise from your function if it better suits
   your needs.
   """
-  @spec parse(String.t(), String.t()) :: {:ok, [variable]} | {:error, Exception.t()}
-  def parse(input, path \\ "(nofile)") do
+  @spec parse(binary) :: {:ok, [variable]} | {:error, Exception.t()}
+  def parse(input) do
     # path is only used for error reporting here
 
     buf = buffer(input, 1, 0)
@@ -530,16 +584,16 @@ defmodule Nvir.Parser do
 
     case do_parse(buf, parser, []) do
       {:ok, tokens} -> {:ok, build_entries(:lists.flatten(tokens))}
-      {:error, {_, _, _} = reason} -> {:error, to_error(reason, path)}
+      {:error, {_, _, _} = reason} -> {:error, to_error(reason)}
     end
   catch
     {:commit_error, tag, arg, _postcommit_buf, failed_buf} ->
-      {:error, to_error({tag, arg, failed_buf}, path)}
+      {:error, to_error({tag, arg, failed_buf})}
   end
 
-  @spec to_error({atom, term, buffer}, binary) :: Exception.t()
-  defp to_error({tag, arg, buffer(line: line)}, path) do
-    %Nvir.ParseError{line: line, tag: tag, arg: arg, path: path}
+  @spec to_error({atom, term, buffer}) :: Exception.t()
+  defp to_error({tag, arg, buffer(line: line)}) do
+    %Nvir.Parser.ParseError{line: line, tag: tag, arg: arg}
   end
 
   @spec consume_whitespace(buffer) :: buffer
@@ -572,21 +626,21 @@ defmodule Nvir.Parser do
   defp build_key(k), do: List.to_string(k)
 
   defp build_value(v) do
-    chunks = chunk_value(:lists.flatten(v), [], [])
+    chunks = v |> :lists.flatten() |> chunk_value([], [])
 
-    if Enum.any?(chunks, &match?({:getvar, _}, &1)) do
-      fn resolver -> interpolate_var(chunks, resolver) end
+    if Enum.any?(chunks, &match?({:var, _}, &1)) do
+      chunks
     else
       :erlang.iolist_to_binary(chunks)
     end
   end
 
   # optimization, skip empty chunk
-  defp chunk_value([{:getvar, _} = h | t], [], acc) do
+  defp chunk_value([{:var, _} = h | t], [], acc) do
     chunk_value(t, [], [h | acc])
   end
 
-  defp chunk_value([{:getvar, _} = h | t], chars, acc) do
+  defp chunk_value([{:var, _} = h | t], chars, acc) do
     chunk_value(t, [], [h, List.to_string(:lists.reverse(chars)) | acc])
   end
 
@@ -601,23 +655,5 @@ defmodule Nvir.Parser do
 
   defp chunk_value([], chars, acc) do
     :lists.reverse([List.to_string(:lists.reverse(chars)) | acc])
-  end
-
-  defp interpolate_var(chunks, resolver) do
-    :erlang.iolist_to_binary(interpolate_chunks(chunks, resolver))
-  end
-
-  defp interpolate_chunks([{:getvar, key} | t], resolver) do
-    chunk_value = resolver.(key)
-    true = is_binary(chunk_value)
-    [chunk_value | interpolate_chunks(t, resolver)]
-  end
-
-  defp interpolate_chunks([h | t], resolver) do
-    [h | interpolate_chunks(t, resolver)]
-  end
-
-  defp interpolate_chunks([], _resolver) do
-    []
   end
 end
