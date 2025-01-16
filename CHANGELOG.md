@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0] - 2025-01-16
+
+### 🚀 Features
+
+- [**breaking**] Replace override with overwrite and support custom loaders
+
+### ⚙️ Miscellaneous Tasks
+
+- Update dependabot config (#2)
+- Basic CI
+- Dummy CI change
+
 ## [0.9.4] - 2024-11-25
 
 ### 🐛 Bug Fixes
