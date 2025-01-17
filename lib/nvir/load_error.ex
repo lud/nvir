@@ -5,6 +5,10 @@ defmodule Nvir.LoadError do
   defexception [:reason, :path]
 
   @impl true
+  def message(%{reason: %Nvir.Parser.ParseError{} = pe} = e) do
+    "could not load file #{e.path}, syntax error found on #{e.path}:#{pe.line}:#{pe.col}"
+  end
+
   def message(e) do
     "could not load file #{e.path}, got: #{format_reason(e.reason)}"
   end

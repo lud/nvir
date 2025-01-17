@@ -580,7 +580,7 @@ defmodule Nvir do
       iex> envfile = """
       iex> GREETING=Hello $NAME!
       iex> """
-      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.parse(envfile)
+      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.parse_string(envfile)
       iex> resolver = fn "NAME" -> "World" end
       iex> Nvir.interpolate_var(variable, resolver)
       "Hello World!"

@@ -3,9 +3,10 @@ defmodule Nvir.ParserTest do
   use ExUnit.Case, async: false
 
   doctest Nvir.Parser
+  doctest Nvir.Parser.RDB
 
   defp parse(string) do
-    Nvir.Parser.parse(string)
+    Nvir.Parser.parse_string(string)
   end
 
   defp parse_map!(string) do
@@ -217,7 +218,7 @@ defmodule Nvir.ParserTest do
     end
   end
 
-  describe "leading spaces" do
+  describe "leading whitespace" do
     test "offset on the key" do
       assert %{"SOME_KEY" => "some value"} = parse_map!("      SOME_KEY=some value")
 
@@ -226,6 +227,35 @@ defmodule Nvir.ParserTest do
                        A=1
                B=2
                """)
+    end
+  end
+
+  describe "trailing whitespace" do
+    test "whitespace before newline is trimmed" do
+      assert %{"SOME_KEY" => "some value"} = parse_map!("SOME_KEY=some value    \n")
+    end
+
+    test "whitespace is trimmed if there is a comment" do
+      assert %{"SOME_KEY" => "some value"} = parse_map!("SOME_KEY=some value    # hello \n")
+    end
+
+    test "whitespace only" do
+      assert %{"SOME_KEY" => ""} = parse_map!("SOME_KEY=    ")
+    end
+
+    test "whitespace is not part of the value if there are quotes" do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY="some value"       ))
+      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY="some value"       \n))
+      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY='some value'       ))
+      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY='some value'       \n))
+    end
+
+    test "multiline whitespace is not trimmed" do
+      assert %{"SOME_KEY" => "first    \nsecond    \n"} =
+               parse_map!(~s(SOME_KEY="""\nfirst    \nsecond    \n"""))
+
+      assert %{"SOME_KEY" => "first    \nsecond    \n"} =
+               parse_map!(~s(SOME_KEY='''\nfirst    \nsecond    \n'''))
     end
   end
 

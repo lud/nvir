@@ -27,6 +27,7 @@ experience.
 - [Dotenv File Syntax Cheatsheet](#dotenv-file-syntax-cheatsheet)
   - [Basic Syntax](#basic-syntax)
   - [Comments](#comments)
+  - [Trailing Whitespace](#trailing-whitespace)
   - [Quoted Values](#quoted-values)
   - [Multiline Strings](#multiline-strings)
   - [Variable Interpolation](#variable-interpolation)
@@ -477,6 +478,36 @@ value.
 KEY=value # Inline comment
 
 KEY=value# No preceding space, this is part of the value
+```
+
+### Trailing Whitespace
+
+Trailing whitespace is automatically removed from the end of a value
+
+In this example, some spaces are represented with the `_` symbol to make it look
+more explicit.
+
+```bash
+
+# KEY will contain "value"
+KEY=value # Inline comment
+
+# KEY will contain "value" too
+KEY=value____
+
+# Multiline strings (with simple and double quotes) are NOT trimmed.
+# KEY will contain "Hello!    \nHow are you    \n"
+KEY="""
+Hello____
+How are you____
+"""
+
+# Empty Whitespace is trimmed
+# KEY will contain ""
+KEY=____
+
+# Use quotes to express whitespace
+INDENT="    "
 ```
 
 ### Quoted Values
