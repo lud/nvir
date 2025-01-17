@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2025-01-17
+
+### 🐛 Bug Fixes
+
+- Trim trailing whitespace on unquoted strings
+
 ## [0.10.0] - 2025-01-16
 
 ### 🚀 Features
