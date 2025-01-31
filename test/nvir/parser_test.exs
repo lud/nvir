@@ -141,6 +141,26 @@ defmodule Nvir.ParserTest do
              """)
   end
 
+  test "supports comment lines at the end" do
+    assert %{"GITHUB_API_TOKEN" => "some-token"} =
+             parse_map!("""
+             GITHUB_API_TOKEN=some-token
+             # BROWSER=
+             """)
+
+    assert %{"GITHUB_API_TOKEN" => "some-token"} =
+             parse_map!("""
+             GITHUB_API_TOKEN=some-token
+             # BROWSER=\
+             """)
+
+    assert %{"GITHUB_API_TOKEN" => "some-token"} =
+             parse_map!("""
+             GITHUB_API_TOKEN=some-token
+             # BROWSER=    \
+             """)
+  end
+
   test "supports spaces around keys" do
     assert %{"SOME_KEY" => "some value", "BEFORE" => "some value", "AFTER" => "some value"} =
              parse_map!("""
