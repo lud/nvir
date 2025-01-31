@@ -262,7 +262,7 @@ defmodule Nvir.Parser.RDB do
       many0(space()),
       char(?#),
       many0(not_char(?\n)),
-      char(?\n)
+      eol_or_eos()
     ])
   end
 
