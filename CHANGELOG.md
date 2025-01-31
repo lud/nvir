@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.2] - 2025-01-31
+
+### 🐛 Bug Fixes
+
+- Fixed parsed when ending with comment without final newline
+- Fixed parsed when ending with comment without final newline
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Elixir workflow (#8)
+- Update Elixir workflow (#9)
+
 ## [0.10.1] - 2025-01-17
 
 ### 🐛 Bug Fixes
