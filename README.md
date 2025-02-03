@@ -254,7 +254,7 @@ import Config
 import Nvir
 
 dotenv_loader()
-|> enable_sources(:docs, config_env() == "docs")
+|> enable_sources(:docs, config_env() == :docs)
 |> enable_sources(:release, env!("RELEASE_NAME", :boolean, false))
 |> dotenv_configure(cd: "/app/release/env")
 |> dotenv!(

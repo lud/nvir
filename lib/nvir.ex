@@ -41,7 +41,7 @@ defmodule Nvir do
       import Nvir
 
       dotenv_loader()
-      |> enable_source(:docs, config_env() == "docs")
+      |> enable_source(:docs, config_env() == :docs)
       |> dotenv!(
         docs: ".env.docs",
         dev: ".env.dev",
@@ -54,7 +54,7 @@ defmodule Nvir do
       import Nvir
 
       dotenv_loader()
-      |> enable_source(:docs, config_env() == "docs")
+      |> enable_source(:docs, config_env() == :docs)
       |> dotenv!(
         docs: ".env.docs",
         dev: ".env.dev",
