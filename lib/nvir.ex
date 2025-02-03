@@ -22,8 +22,8 @@ defmodule Nvir do
   @doc """
   Returns a configuration for `dotenv!/2` without any enabled source.
 
-  Generally this is used for custom loading strategies, see `dotenv_loader/0` or
-  `dotenv_loader/1` to use reasonable defaults.
+  Generally this is used for custom loading strategies, see `dotenv_loader/0` to
+  use reasonable defaults.
   """
   @spec dotenv_new :: t
   def dotenv_new do
