@@ -534,11 +534,12 @@ KEY="supports \n \r \t \b \f escapes"
 KEY='value with spaces'
 KEY='no escapes \n' # value will have a "\" character followed by a "n".
 KEY='escape \'quotes\' inside'
+# Do not mid Github syntax highlighting :)
 ```
 
 ### Multiline Strings
 
-The same rules applies for escaping as in single line values:
+The same rules apply for escaping as in single line values:
 
 * Double quotes let you write escape sequences.
 * Single quotes define verbatim values. No escaping is done except for the
