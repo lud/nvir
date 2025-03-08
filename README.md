@@ -322,7 +322,7 @@ dotenv_new()
 
 ## The `env!` functions
 
-The `env!` functions allows you to load an environment variable and cast its
+The `env!` functions allow you to load an environment variable and cast its
 content to the appropriate type.
 
 ### Requiring a variable
