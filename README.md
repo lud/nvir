@@ -533,8 +533,8 @@ KEY="supports \n \r \t \b \f escapes"
 ```bash
 KEY='value with spaces'
 KEY='no escapes \n' # value will have a "\" character followed by a "n".
+# Do not trust Github syntax highlighting here ;)
 KEY='escape \'quotes\' inside'
-# Do not mid Github syntax highlighting :)
 ```
 
 ### Multiline Strings
