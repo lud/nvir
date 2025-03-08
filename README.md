@@ -265,8 +265,8 @@ dotenv_loader()
 )
 ```
 
-In the example above, we will enable the `:docs` and `:ci` tag when the defined
-conditions are met.
+In the example above, we will enable the `:docs` and `:release` tags when the
+defined conditions are met.
 
 Plus, we changed the directory where the .env files are loaded from. This will
 not affect the `/var/release.env` file since it's an absolute path.
