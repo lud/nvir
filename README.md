@@ -166,7 +166,7 @@ The files loaded by this library will not replace variables already defined in
 the real environment.
 
 That is, as your `HOME` variable already exists, defining `HOME=/somewhere/else`
-in and `.env` file will have no effect.
+in an `.env` file will have no effect.
 
 A special tag can be given to `dotenv!/1` to overwrite system variables:
 
