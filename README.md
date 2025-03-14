@@ -65,7 +65,7 @@ As usual, pull the library from your `mix.exs` file.
 ```elixir
 def deps do
   [
-    {:nvir, "~> 0.10"},
+    {:nvir, "~> 0.11"},
   ]
 end
 ```

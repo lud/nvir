@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0] - 2025-03-14
+
+### 🚀 Features
+
+- Added a hook to change variables before they are set
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix exemples with custom MIX_ENV
+- Remove unknown function in docs
+- Update dependabot config (#10)
+- Update Elixir workflow (#15)
+- Refactor collecting sources
+
 ## [0.10.2] - 2025-01-31
 
 ### 🐛 Bug Fixes
