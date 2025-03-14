@@ -77,44 +77,50 @@ defmodule NvirTest do
     end
 
     test "collect from env only" do
-      assert {[1, 2, 3, 4], []} =
+      assert {["1", "2", "3", "4"], []} =
                Nvir.collect_sources(match_env(:abc),
-                 abc: [1],
-                 abc: 2,
-                 other: [0, 0, 0],
-                 abc: [3, abc: 4, other: 0],
-                 other: [abc: 0]
+                 abc: ["1"],
+                 abc: "2",
+                 other: ["0", "0", "0"],
+                 abc: ["3", abc: "4", other: "0"],
+                 other: [abc: "0"]
                )
     end
 
     test "collect from env and all" do
-      assert {[1, 2, 3, 4], []} =
+      assert {["1", "2", "3", "4"], []} =
                Nvir.collect_sources(match_env(:abc),
-                 abc: [1],
-                 *: [2, abc: 3],
-                 *: [other: 0],
-                 abc: 4,
-                 other: [*: 0, abc: 0]
+                 abc: ["1"],
+                 *: ["2", abc: "3"],
+                 *: [other: "0"],
+                 abc: "4",
+                 other: [*: "0", abc: "0"]
                )
     end
 
     test "collect basic overwrites" do
-      assert {[], [101]} = Nvir.collect_sources(match_env(:abc), overwrite: 101)
-      assert {[], [101]} = Nvir.collect_sources(match_env(:abc), overwrite: [101])
-      assert {[], [101, 102]} = Nvir.collect_sources(match_env(:abc), overwrite: [101, 102])
+      assert {[], ["101"]} = Nvir.collect_sources(match_env(:abc), overwrite: "101")
+      assert {[], ["101"]} = Nvir.collect_sources(match_env(:abc), overwrite: ["101"])
 
-      assert {[], [101, 102]} =
+      assert {[], ["101", "102"]} =
+               Nvir.collect_sources(match_env(:abc), overwrite: ["101", "102"])
+
+      assert {[], ["101", "102"]} =
                Nvir.collect_sources(match_env(:abc),
-                 overwrite: [overwrite: [[overwrite: [[101, overwrite: 102]]]]]
+                 overwrite: [overwrite: [[overwrite: [["101", overwrite: "102"]]]]]
                )
     end
 
     test "overwrites and normal" do
-      assert {[1], [101]} =
-               Nvir.collect_sources(match_env(:abc), overwrite: [101], abc: 1)
+      assert {["1"], ["101"]} =
+               Nvir.collect_sources(match_env(:abc), overwrite: ["101"], abc: "1")
 
-      assert {[1], [101, 102]} =
-               Nvir.collect_sources(match_env(:abc), overwrite: [101], abc: 1, overwrite: 102)
+      assert {["1"], ["101", "102"]} =
+               Nvir.collect_sources(match_env(:abc),
+                 overwrite: ["101"],
+                 abc: "1",
+                 overwrite: "102"
+               )
     end
 
     test "overwrites with env" do
@@ -122,23 +128,23 @@ defmodule NvirTest do
       # the overwrite are removed from the regular sources even if the tag can be
       # matched.
 
-      assert {[1, 2], [1001, 1002, 1003, 1004, 1005]} =
+      assert {["1", "2"], ["1001", "1002", "1003", "1004", "1005"]} =
                Nvir.collect_sources(%Nvir{enabled_sources: %{overwrite: true, abc: true}}, [
-                 1,
-                 overwrite: [1001, abc: [1002]],
-                 abc: [2, overwrite: [1003, other: -1]],
-                 other: [overwrite: -2, abc: -3],
-                 abc: [overwrite: [abc: 1004, other: -4]],
-                 *: [overwrite: [abc: 1005, other: -5]]
+                 "1",
+                 overwrite: ["1001", abc: ["1002"]],
+                 abc: ["2", overwrite: ["1003", other: "-1"]],
+                 other: [overwrite: "-2", abc: "-3"],
+                 abc: [overwrite: [abc: "1004", other: "-4"]],
+                 *: [overwrite: [abc: "1005", other: "-5"]]
                ])
     end
 
     test "odd cases" do
       # nested tuples
-      assert {[1], _} = Nvir.collect_sources(match_env(:abc), {:abc, {:abc, {:abc, 1}}})
+      assert {["1"], _} = Nvir.collect_sources(match_env(:abc), {:abc, {:abc, {:abc, "1"}}})
 
       # lists without tags
-      assert {[1, 2], _} = Nvir.collect_sources(match_env(:abc), [[[[[1]]]], [[[[[2]]]]]])
+      assert {["1", "2"], _} = Nvir.collect_sources(match_env(:abc), [[[[["1"]]]], [[[[["2"]]]]]])
     end
   end
 

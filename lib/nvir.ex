@@ -47,26 +47,14 @@ defmodule Nvir do
         dev: ".env.dev",
         test: ".env.test"
       )
-
-  Disable loading
-
-      import Config
-      import Nvir
-
-      dotenv_loader()
-      |> enable_source(:docs, config_env() == :docs)
-      |> dotenv!(
-        docs: ".env.docs",
-        dev: ".env.dev",
-        test: ".env.test"
-      )
   """
   @spec dotenv_loader :: t
   def dotenv_loader do
     dotenv_configure(dotenv_new(), enabled_sources: default_enabled_sources())
   end
 
-  defp default_enabled_sources do
+  @doc false
+  def default_enabled_sources do
     defaults = %{*: true}
 
     defaults =
@@ -413,102 +401,44 @@ defmodule Nvir do
   def collect_sources(nvir, sources) do
     %{enabled_sources: enabled} = nvir
 
-    regular =
+    {_regular, _overwrites} =
       sources
-      |> drop_overwrites()
-      |> collect_matches(enabled, [])
-
-    overwrites =
-      sources
-      |> take_overwrites()
-      |> collect_matches(enabled, [])
-
-    {regular, overwrites}
+      # source order is reversed on collection
+      |> collect_sources([], [])
+      # and reversed again on filtering
+      |> filter_sources(enabled)
   end
 
-  defp drop_overwrites(source) when is_binary(source), do: source
-
-  defp drop_overwrites([source | sources]),
-    do: [drop_overwrites(source) | drop_overwrites(sources)]
-
-  defp drop_overwrites([]), do: []
-
-  defp drop_overwrites({:overwrite, _}), do: []
-  defp drop_overwrites({tag, source}), do: {tag, drop_overwrites(source)}
-
-  if Mix.env() == :test do
-    # support integers for tests, to check on ordering
-    defp drop_overwrites(source) when is_integer(source), do: source
-  else
-    defp drop_overwrites(source) do
-      raise ArgumentError, "invalid env source: #{inspect(source)}"
-    end
+  defp collect_sources(list, rev_prefix, accin) when is_list(list) do
+    Enum.reduce(list, accin, fn sub, acc -> collect_sources(sub, rev_prefix, acc) end)
   end
 
-  defp take_overwrites([{:overwrite, source} | sources]),
-    do: [unwrap_overwrites(source) | take_overwrites(sources)]
-
-  defp take_overwrites([{tag, source} | sources]),
-    do: [{tag, take_overwrites(source)} | take_overwrites(sources)]
-
-  defp take_overwrites([source | sources]),
-    do: [take_overwrites(source) | take_overwrites(sources)]
-
-  defp take_overwrites(_), do: []
-
-  # removes the :overwrite tag to all nested overwrites. Nested overwrites should
-  # not be used as they are meaningless but they are still supported.
-  defp unwrap_overwrites(source) when is_binary(source), do: source
-
-  defp unwrap_overwrites([{:overwrite, source} | sources]),
-    do: [unwrap_overwrites(source) | unwrap_overwrites(sources)]
-
-  defp unwrap_overwrites([{keep_tag, source} | sources]),
-    do: [{keep_tag, unwrap_overwrites(source)} | unwrap_overwrites(sources)]
-
-  defp unwrap_overwrites([source | sources]),
-    do: [unwrap_overwrites(source) | unwrap_overwrites(sources)]
-
-  defp unwrap_overwrites([]), do: []
-
-  if Mix.env() == :test do
-    # support integers for tests, to check on ordering
-    defp unwrap_overwrites(source) when is_integer(source), do: source
-  else
-    defp unwrap_overwrites(source) do
-      raise ArgumentError, "invalid env source: #{inspect(source)}"
-    end
+  defp collect_sources({tag, sub}, rev_prefix, acc) do
+    collect_sources(sub, [tag | rev_prefix], acc)
   end
 
-  defp collect_matches(source, _enabled, acc) when is_binary(source) do
-    [source | acc]
+  defp collect_sources(file, rev_prefix, acc) when is_binary(file) do
+    [{rev_prefix, file} | acc]
   end
 
-  defp collect_matches([h | t], enabled, acc) do
-    collect_matches(h, enabled, collect_matches(t, enabled, acc))
+  defp filter_sources(tagged_sources, enabled) do
+    Enum.reduce(tagged_sources, {[], []}, fn {tags, file}, {regular_acc, overwrite_acc} ->
+      case match_tags(tags, enabled, :regular) do
+        :overwrite -> {regular_acc, [file | overwrite_acc]}
+        :regular -> {[file | regular_acc], overwrite_acc}
+        :ignore -> {regular_acc, overwrite_acc}
+      end
+    end)
   end
 
-  defp collect_matches([], _enabled, acc), do: acc
+  defp match_tags([], _enabled, kind), do: kind
+  defp match_tags([:overwrite | t], enabled, _kind), do: match_tags(t, enabled, :overwrite)
+  defp match_tags([:* | t], enabled, kind), do: match_tags(t, enabled, kind)
 
-  defp collect_matches({tag, source}, enabled, acc)
-       when :erlang.map_get(tag, enabled) == true do
-    collect_matches(source, enabled, acc)
-  end
+  defp match_tags([h | t], enabled, kind) when :erlang.map_get(h, enabled),
+    do: match_tags(t, enabled, kind)
 
-  defp collect_matches({:*, source}, enabled, acc) do
-    collect_matches(source, enabled, acc)
-  end
-
-  defp collect_matches({_, _}, _enabled, acc) do
-    acc
-  end
-
-  if Mix.env() == :test do
-    # support integers for tests, to check on ordering
-    defp collect_matches(source, _enabled, acc) when is_integer(source) do
-      [source | acc]
-    end
-  end
+  defp match_tags(_, _, _), do: :ignore
 
   @doc """
   Returns the value of the given `var`, transformed and validated by the given
