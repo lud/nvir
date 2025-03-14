@@ -1,4 +1,6 @@
 defmodule Nvir do
+  require Config
+
   @moduledoc """
   This is the main API for Nvir, an environment variable loader and validator.
 
@@ -8,16 +10,22 @@ defmodule Nvir do
   * The the `dotenv!/1` function.
   """
 
-  require Config
-
   @enforce_keys [:enabled_sources]
-  defstruct enabled_sources: %{}, parser: Nvir.Parser, cd: nil
+  defstruct enabled_sources: %{},
+            parser: Nvir.Parser,
+            cd: nil,
+            before_env_set: nil
 
   @type t :: %__MODULE__{enabled_sources: %{atom => boolean}, parser: module, cd: nil | Path.t()}
   @type source :: binary | {atom, source} | [source]
   @type sources :: source | [sources] | {atom, sources}
+  @type var_def :: {String.t(), String.t()}
+  @type transformer :: (var_def -> var_def)
   @type config_opt ::
-          {:enabled_sources, %{atom => boolean}} | {:parser, module} | {:cd, nil | Path.t()}
+          {:enabled_sources, %{atom => boolean}}
+          | {:parser, module}
+          | {:cd, nil | Path.t()}
+          | {:before_env_set, transformer}
 
   @doc """
   Returns a configuration for `dotenv!/2` without any enabled source.
@@ -53,7 +61,13 @@ defmodule Nvir do
     dotenv_configure(dotenv_new(), enabled_sources: default_enabled_sources())
   end
 
-  @doc false
+  @doc """
+  Returns the sources enabed by default when using `dotenv/1` or
+  `dotenv_loader/0`. The value changes dynamically depending on the current
+  environment and operating system.
+
+  See the "Predefined tags" section on the `dotenv!/1` documentation.
+  """
   def default_enabled_sources do
     defaults = %{*: true}
 
@@ -113,6 +127,20 @@ defmodule Nvir do
 
   The options are not merged.
 
+  ### Options
+
+  * `:enabled_sources` - A map of `%{atom => boolean}` values to declare which
+    source tags will be enabled when collecting sources. Defaults to the return
+    value of `default_enabled_sources/0`.
+  * `:parser` - The module to parse environment variables files. Defaults to
+    `Nvir.Parser`.
+  * `:cd` - A directory path to load relative source paths from.
+  * `:before_env_set` - A function that accepts a `{varname, value}` tuple and
+    must return a similar tuple. This gives the possibility to change or
+    transform the parsed variables before the environment is altered. Returned
+    `varname` and `value` must implement the `String.Chars` protocol. Returning
+    `nil` as a value will delete the environment variable.
+
   ### Example
 
   Implement loading a custom `:docs` environment and load a file when running a
@@ -148,7 +176,7 @@ defmodule Nvir do
   defp validate_opt!({k, v} = opt) do
     if valid_opt?(opt),
       do: opt,
-      else: raise(ArgumentError, "invalid #{inspect(k)} option: #{inspect(v)}")
+      else: raise(ArgumentError, "invalid dotenv option: #{inspect({k, v})}")
   end
 
   defp valid_opt?({:enabled_sources, flags}) do
@@ -168,6 +196,9 @@ defmodule Nvir do
 
   defp valid_opt?({:parser, module}), do: is_atom(module)
   defp valid_opt?({:cd, dir}), do: is_binary(dir) or is_nil(dir) or is_list(dir)
+  defp valid_opt?({:before_env_set, fun}), do: is_function(fun, 1)
+
+  defp valid_opt?(_other), do: false
 
   @doc """
   Enables or disables environment variable sources under the given tag.
@@ -311,89 +342,21 @@ defmodule Nvir do
   def dotenv!(nvir, sources) do
     {regular, overwrites} = collect_sources(nvir, sources)
 
-    preexisting_regular = System.get_env()
+    existing_vars = System.get_env()
     parsed_regular = load_files(nvir, regular)
-    added_regular = merge_vars_regular(parsed_regular, preexisting_regular)
+    to_add_regular = build_vars_regular(parsed_regular, existing_vars)
+    transformed_regular = before_env_set(nvir.before_env_set, to_add_regular)
 
-    preexisting_overwrite = System.get_env()
+    existing_vars_1 = Map.merge(existing_vars, transformed_regular)
+
     parsed_overwrites = load_files(nvir, overwrites)
-    added_overwrites = merge_vars_overwrite(parsed_overwrites, preexisting_overwrite)
+    to_add_overwrites = build_vars_overwrite(parsed_overwrites, existing_vars_1)
+    transformed_overwrites = before_env_set(nvir.before_env_set, to_add_overwrites)
 
-    Map.merge(added_regular, added_overwrites)
-  end
+    to_add = Map.merge(transformed_regular, transformed_overwrites)
+    :ok = System.put_env(to_add)
 
-  defp load_files(nvir, files) do
-    %{parser: parser, cd: cd} = nvir
-
-    Enum.flat_map(files, fn file ->
-      path = expand_path(file, cd)
-
-      case load_file(path, parser) do
-        {:ok, entries} ->
-          [entries]
-
-        {:error, :enoent} ->
-          []
-
-        {:error, parse_error} ->
-          raise Nvir.LoadError, reason: parse_error, path: path
-      end
-    end)
-  end
-
-  defp expand_path(file, nil), do: file
-  defp expand_path(file, cd), do: Path.expand(file, cd)
-
-  defp load_file(path, parser) do
-    if File.regular?(path),
-      do: parser.parse_file(path),
-      else: {:error, :enoent}
-  end
-
-  defp merge_vars_regular(files_vars, sys_env) do
-    to_add =
-      for file_vars <- files_vars, {k, v} <- file_vars, reduce: %{} do
-        to_add ->
-          case Map.fetch(sys_env, k) do
-            {:ok, _} -> to_add
-            :error -> Map.put(to_add, k, build_value(v, sys_env, to_add))
-          end
-      end
-
-    System.put_env(to_add)
     to_add
-  end
-
-  defp merge_vars_overwrite(files_vars, sys_env) do
-    to_add =
-      for file_vars <- files_vars, {k, v} <- file_vars, reduce: %{} do
-        # On overwrite, we pass (to_add, sys_env) instead of (sys_env, to_add),
-        # so getting a variable will use the current overwrites first.
-        to_add -> Map.put(to_add, k, build_value(v, to_add, sys_env))
-      end
-
-    System.put_env(to_add)
-    to_add
-  end
-
-  defp build_value(v, _, _) when is_binary(v) do
-    # skip building a resolver when the var value is already a string
-    v
-  end
-
-  defp build_value(v, vars, vars_fallback) do
-    interpolate_var(v, resolver(vars, vars_fallback))
-  end
-
-  defp resolver(vars, vars_fallback) do
-    # The resolver will always return a string, as $UNKNOWN returns an empty
-    # string in a linux shell.
-    fn key ->
-      with :error <- Map.fetch(vars, key),
-           :error <- Map.fetch(vars_fallback, key),
-           do: "",
-           else: ({:ok, v} -> v)
-    end
   end
 
   @doc false
@@ -439,6 +402,103 @@ defmodule Nvir do
     do: match_tags(t, enabled, kind)
 
   defp match_tags(_, _, _), do: :ignore
+
+  defp load_files(nvir, files) do
+    %{parser: parser, cd: cd} = nvir
+
+    Enum.flat_map(files, fn file ->
+      path = expand_path(file, cd)
+
+      case load_file(path, parser) do
+        {:ok, entries} ->
+          [entries]
+
+        {:error, :enoent} ->
+          []
+
+        {:error, parse_error} ->
+          raise Nvir.LoadError, reason: parse_error, path: path
+      end
+    end)
+  end
+
+  defp expand_path(file, nil), do: file
+  defp expand_path(file, cd), do: Path.expand(file, cd)
+
+  defp load_file(path, parser) do
+    if File.regular?(path),
+      do: parser.parse_file(path),
+      else: {:error, :enoent}
+  end
+
+  defp build_vars_regular(files_vars, sys_env) do
+    to_add =
+      for file_vars <- files_vars, {k, v} <- file_vars, reduce: %{} do
+        to_add ->
+          case Map.fetch(sys_env, k) do
+            {:ok, _} -> to_add
+            :error -> Map.put(to_add, k, build_value(v, sys_env, to_add))
+          end
+      end
+
+    to_add
+  end
+
+  defp build_vars_overwrite(files_vars, sys_env) do
+    to_add =
+      for file_vars <- files_vars, {k, v} <- file_vars, reduce: %{} do
+        # On overwrite, we pass (to_add, sys_env) instead of (sys_env, to_add),
+        # so getting a variable will use the current overwrites first.
+        to_add -> Map.put(to_add, k, build_value(v, to_add, sys_env))
+      end
+
+    to_add
+  end
+
+  defp build_value(v, _, _) when is_binary(v) do
+    # skip building a resolver when the var value is already a string
+    v
+  end
+
+  defp build_value(v, vars, vars_fallback) do
+    interpolate_var(v, resolver(vars, vars_fallback))
+  end
+
+  defp resolver(vars, vars_fallback) do
+    # The resolver will always return a string, as $UNKNOWN returns an empty
+    # string in a linux shell.
+    fn key ->
+      with :error <- Map.fetch(vars, key),
+           :error <- Map.fetch(vars_fallback, key),
+           do: "",
+           else: ({:ok, v} -> v)
+    end
+  end
+
+  defp before_env_set(nil, variables), do: variables
+
+  defp before_env_set(fun, variables) do
+    Map.new(variables, fn pair ->
+      case fun.(pair) do
+        {k, v} when is_binary(k) and is_binary(v) ->
+          {k, v}
+
+        {k, v} ->
+          try do
+            k = to_string(k)
+            v = to_string(v)
+            {k, v}
+          rescue
+            e in Protocol.UndefinedError ->
+              reraise "invalid :before_env_set return value (could not convert to string): #{inspect(e.value)}",
+                      __STACKTRACE__
+          end
+
+        other ->
+          raise "invalid :before_env_set return value: #{inspect(other)}"
+      end
+    end)
+  end
 
   @doc """
   Returns the value of the given `var`, transformed and validated by the given

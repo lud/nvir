@@ -16,20 +16,39 @@ experience.
 - [Basic Usage](#basic-usage)
 - [File loading](#file-loading)
   - [Defining the sources](#defining-the-sources)
+    - [The classic dotenv experience](#the-classic-dotenv-experience)
+    - [A list of sources](#a-list-of-sources)
+    - [Tagged sources](#tagged-sources)
+    - [Mixing it all together](#mixing-it-all-together)
   - [Overwrite mechanics](#overwrite-mechanics)
   - [File load order](#file-load-order)
   - [Custom loaders](#custom-loaders)
+    - [Using a custom loader](#using-a-custom-loader)
+    - [Disabling default tags](#disabling-default-tags)
+    - [Disabling all tags by default](#disabling-all-tags-by-default)
+    - [Using a custom parser](#using-a-custom-parser)
+    - [Transforming the variables](#transforming-the-variables)
 - [The `env!` functions](#the-env-functions)
   - [Requiring a variable](#requiring-a-variable)
   - [Default values](#default-values)
   - [Available Casters](#available-casters)
+    - [String Casters](#string-casters)
+    - [Boolean Casters](#boolean-casters)
+    - [Number Casters](#number-casters)
+    - [Atom Casters](#atom-casters)
+    - [Deprecated casters](#deprecated-casters)
   - [Custom Casters](#custom-casters)
 - [Dotenv File Syntax Cheatsheet](#dotenv-file-syntax-cheatsheet)
   - [Basic Syntax](#basic-syntax)
   - [Comments](#comments)
   - [Trailing Whitespace](#trailing-whitespace)
   - [Quoted Values](#quoted-values)
+    - [Raw Strings](#raw-strings)
+    - [Double Quotes](#double-quotes)
+    - [Single Quotes](#single-quotes)
   - [Multiline Strings](#multiline-strings)
+    - [Triple Double Quotes](#triple-double-quotes)
+    - [Triple Single Quotes](#triple-single-quotes)
   - [Variable Interpolation](#variable-interpolation)
 - [Environment Files Inheritance](#environment-files-inheritance)
   - [Rules for regular files](#rules-for-regular-files)
@@ -296,13 +315,13 @@ The `:overwrite` tag cannot be changed, as it is handled separately from other
 tags.
 
 
-#### Disable all tags by default
+#### Disabling all tags by default
 
 Use `dotenv_new()` instead of `dotenv_loader()` to get an empty loader without
 any enabled tag.
 
 
-#### Use a custom parser
+#### Using a custom parser
 
 If you want to parse the .env files yourself, or add support for other file
 formats, pass an implementation of the `Nvir.Parser` behaviour as the `:parser`
@@ -319,6 +338,46 @@ dotenv_new()
 ```
 
 
+#### Transforming the variables
+
+It is possible to change the keys and values of the variables before they are
+defined in the environment, by using the `:before_env_set` hook.
+
+The function is passed a tuple with the variable name and value, and must return
+a name and value.
+
+The returned name and value must be encodable as strings using the `to_string/1`
+Elixir function.
+
+It _is_ possible to return a different name from there. The original variable name will _not_ be defined. We use this in the example below but it's generally not recommended for clarity's sake.
+
+An example using values that are not strings and swaps the variable name.
+
+```elixir
+# runtime.exs
+import Config
+import Nvir
+
+to_homepage = fn username ->
+  uri = URI.parse("http://example.com/")
+  %{uri | path: "/" <> username}
+end
+
+dotenv_new()
+|> dotenv_configure(
+  before_env_set: fn
+    {"USERNAME", username} ->
+      {:HOMEPAGE, to_homepage.(username)}
+    other ->
+      other
+  end
+)
+|> dotenv!(".env")
+```
+
+In the example above, the defined variable will be `"HOMEPAGE"` and not the
+equivalent atom. The value will be `"http://example.com/some-username"` as a
+string too.
 
 ## The `env!` functions
 

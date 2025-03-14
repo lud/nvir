@@ -1,6 +1,6 @@
 {
   "markdown.extension.toc.slugifyMode": "github",
-  "markdown.extension.toc.levels": "2..3",
+  "markdown.extension.toc.levels": "2..4",
   "cSpell.enabled": false,
   "cSpell.words": [
     "errmsg",

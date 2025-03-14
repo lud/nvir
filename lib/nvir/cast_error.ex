@@ -2,7 +2,6 @@ defmodule Nvir.CastError do
   @moduledoc """
   Exception defining an invalid cast. For instance with this env file:
 
-
       NOT_AN_INT=some string
 
   Calling `Nvir.env!/2` with the `:integer!` caster will raise an

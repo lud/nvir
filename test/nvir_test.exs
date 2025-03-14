@@ -46,6 +46,10 @@ defmodule NvirTest do
       assert %{*: true} = Nvir.dotenv_loader().enabled_sources
     end
 
+    test "default loader should not have any before_env_set transformer" do
+      assert nil == Nvir.dotenv_loader().before_env_set
+    end
+
     test "the configuration is validated" do
       # Not a boolean value
       assert_raise ArgumentError, fn ->
@@ -489,6 +493,111 @@ defmodule NvirTest do
         ''')
 
       assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
+    end
+  end
+
+  describe "pre declare hook" do
+    test "variables should be transformed before being set" do
+      delete_key("CHANGED_KEY")
+      delete_key("COMMON_SWAPPED")
+      delete_key("COMMON")
+      delete_key("HOOKED")
+      delete_key("NOT_HOOKED")
+      delete_key("OVERWRITE_HOOKED")
+      delete_key("OVERWRITE_NOT_HOOKED")
+      delete_key("SWAPPED_KEY")
+
+      regular_file =
+        create_file("""
+        HOOKED=hello world
+        NOT_HOOKED=hello moon
+        COMMON=in regular
+        """)
+
+      overwrite_file =
+        create_file("""
+        OVERWRITE_HOOKED=hello mars
+        OVERWRITE_NOT_HOOKED=hello saturn
+        COMMON=in overwrite
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set: fn
+            {"HOOKED" = k, v} ->
+              {k, String.upcase(v)}
+
+            {"OVERWRITE_HOOKED", v} ->
+              {"SWAPPED_KEY", v}
+
+            {"COMMON", "in regular"} ->
+              {"COMMON", "no-interpol-$COMMON"}
+
+            {"COMMON", "in overwrite"} ->
+              {"COMMON_SWAPPED", "nasty"}
+
+            pair ->
+              pair
+          end
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "HELLO WORLD" = System.fetch_env!("HOOKED")
+      assert "hello moon" = System.fetch_env!("NOT_HOOKED")
+      assert "hello mars" = System.fetch_env!("SWAPPED_KEY")
+      assert "hello saturn" = System.fetch_env!("OVERWRITE_NOT_HOOKED")
+      assert "no-interpol-$COMMON" = System.fetch_env!("COMMON")
+      assert "nasty" = System.fetch_env!("COMMON_SWAPPED")
+      assert :error = System.fetch_env("OVERWRITE_HOOKED")
+
+      assert %{
+               "SWAPPED_KEY" => "hello mars",
+               "COMMON_SWAPPED" => "nasty",
+               "COMMON" => "no-interpol-$COMMON",
+               "HOOKED" => "HELLO WORLD",
+               "NOT_HOOKED" => "hello moon",
+               "OVERWRITE_NOT_HOOKED" => "hello saturn"
+             } == changes
+    end
+
+    test "the hook can return values that implement the String.Chars protocol" do
+      delete_key("MEDIAN_VALUE")
+      delete_key("some_atom_key")
+      delete_key("USER_HOMEPAGE")
+
+      test_file =
+        create_file("""
+        STRINGKEY=stringval
+        MEDIAN_VALUE=will be a number
+        USERNAME=alice
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set: fn
+            {"STRINGKEY", _} ->
+              {:some_atom_key, [~c"hello", ?=, ~c"world"]}
+
+            {"MEDIAN_VALUE" = k, _} ->
+              {k, 45.67}
+
+            {"USERNAME", v} ->
+              {"USER_HOMEPAGE", %{URI.parse("http://homepage.com/") | path: "/#{v}"}}
+          end
+        )
+        |> Nvir.dotenv!(test_file)
+
+      assert "hello=world" = System.fetch_env!("some_atom_key")
+      assert "45.67" = System.fetch_env!("MEDIAN_VALUE")
+      assert "http://homepage.com/alice" = System.fetch_env!("USER_HOMEPAGE")
+
+      assert %{
+               "MEDIAN_VALUE" => "45.67",
+               "some_atom_key" => "hello=world",
+               "USER_HOMEPAGE" => "http://homepage.com/alice"
+             } == changes
     end
   end
 
