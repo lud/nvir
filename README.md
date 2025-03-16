@@ -412,7 +412,7 @@ variables loaded by `dotenv!/1`. Using `System.fetch_env!/1`,
 `System.get_env/3`, etc. is still perfectly fine.
 
 You may also use another library like
-[Enviable](https://github.com/halostatue/enviable) that provide advanced
+[Enviable](https://github.com/halostatue/enviable) that provides more advanced
 casters:
 
 ```elixir
