@@ -1,15 +1,19 @@
 defmodule Nvir.CastTest do
+  alias Nvir.Cast
   use ExUnit.Case, async: true
 
-  defp cast(value, type) do
-    Nvir.Cast.cast(value, type)
-  end
+  defdelegate cast(value, type), to: Cast
 
   def atom_exists?(string) do
     _ = String.to_existing_atom(string)
     true
   rescue
     _ in ArgumentError -> false
+  end
+
+  setup do
+    Cast.ignore_warnings()
+    :ok
   end
 
   describe "atom" do

@@ -786,7 +786,7 @@ defmodule NvirTest do
   describe "get env var without default" do
     test "valid" do
       put_key("SOME_INT", "1234")
-      assert 1234 = Nvir.env!("SOME_INT", :integer)
+      assert 1234 = Nvir.env!("SOME_INT", :integer!)
     end
 
     test "defaults to string" do
@@ -801,7 +801,7 @@ defmodule NvirTest do
 
       valid_error!(
         assert_raise Nvir.CastError, ~r/does not satisfy/, fn ->
-          assert 1234 = Nvir.env!("SOME_INT", :integer)
+          assert 1234 = Nvir.env!("SOME_INT", :integer!)
         end
       )
     end
@@ -811,14 +811,16 @@ defmodule NvirTest do
 
       valid_error!(
         assert_raise Nvir.CastError, ~r/empty value/, fn ->
-          assert 1234 = Nvir.env!("SOME_INT", :integer)
+          assert 1234 = Nvir.env!("SOME_INT", :integer!)
         end
       )
 
-      # legacy :integer! has the same behaviour as :integer
+      # legacy :integer has the same behaviour as :integer!
+      Nvir.Cast.ignore_warnings()
+
       valid_error!(
         assert_raise Nvir.CastError, ~r/empty value/, fn ->
-          assert 1234 = Nvir.env!("SOME_INT", :integer!)
+          assert 1234 = Nvir.env!("SOME_INT", :integer)
         end
       )
     end
@@ -874,7 +876,7 @@ defmodule NvirTest do
   describe "get env var with default" do
     test "valid" do
       put_key("SOME_INT", "1234")
-      assert 1234 = Nvir.env!("SOME_INT", :integer, 9999)
+      assert 1234 = Nvir.env!("SOME_INT", :integer!, 9999)
     end
 
     test "invalid" do
@@ -885,7 +887,7 @@ defmodule NvirTest do
 
       valid_error!(
         assert_raise Nvir.CastError, ~r/does not satisfy/, fn ->
-          assert 1234 = Nvir.env!("SOME_INT", :integer, 9999)
+          assert 1234 = Nvir.env!("SOME_INT", :integer!, 9999)
         end
       )
     end
