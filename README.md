@@ -409,7 +409,7 @@ would call `System.fetch_env!/1` instead.
 
 The corollary is that you do not have to use `env!/2` or `env!/3` to fetch
 variables loaded by `dotenv!/1`. Using `System.fetch_env!/1`,
-`System.get_env/3`, etc. is still perfectly fine.
+`System.get_env/2`, etc. is still perfectly fine.
 
 You may also use another library like
 [Enviable](https://github.com/halostatue/enviable) that provides more advanced
