@@ -29,9 +29,10 @@ experience.
     - [Using a custom parser](#using-a-custom-parser)
     - [Transforming the variables](#transforming-the-variables)
 - [The `env!` functions](#the-env-functions)
+  - [Disclaimer](#disclaimer)
   - [Requiring a variable](#requiring-a-variable)
   - [Default values](#default-values)
-  - [Available Casters](#available-casters)
+  - [Casting values](#casting-values)
     - [String Casters](#string-casters)
     - [Boolean Casters](#boolean-casters)
     - [Number Casters](#number-casters)
@@ -381,48 +382,88 @@ string too.
 
 ## The `env!` functions
 
-The `env!` functions allow you to load an environment variable and cast its
-content to the appropriate type.
+The `env!` functions allow you to load an environment variable and cast it to
+the appropriate type by passing an optional caster:
+
+```elixir
+import Nvir
+
+
+# This will raise if the variable is not defined
+host = env!("HOST")
+
+# This will raise if the variable is not defined or is empty
+host = env!("HOST", :string!)
+
+# This will use a default value if the variable is not defined, or otherwise
+# convert the value to an integer.
+port = env!("PORT", :integer!, 4000)
+```
+
+### Disclaimer
+
+Note that the `env!` functions are merely _helpers_ built around
+`System.fetch_env!/1` with support for casting. They _do not_ require
+`dotenv!/1` to have been called beforehand and are safe to call wherever you
+would call `System.fetch_env!/1` instead.
+
+The corollary is that you do not have to use `env!/2` or `env!/3` to fetch
+variables loaded by `dotenv!/1`. Using `System.fetch_env!/1`,
+`System.get_env/2`, etc. is still perfectly fine.
+
+You may also use another library like
+[Enviable](https://github.com/halostatue/enviable) that provides more advanced
+casters:
+
+```elixir
+import Nvir
+import Enviable
+
+dotenv!(".env")
+
+secret_key = fetch_env_as_pem!("SECRET_KEY")
+dns_config = fetch_env_as_json!("DNS_CONFIG_JSON")
+```
+
 
 ### Requiring a variable
 
 Calling `env!(var, caster)` will attempt to fetch the variable, just like
-`System.fetch_env!/1` does, cast its value, and return it.
+`System.fetch_env!/1` does, cast the value, and return it.
 
-A `System.EnvError` exception will be raised if the variable is not defined.
+The `env!(var)` form is a shorthand for `env!(var, :string)`.
 
-An `Nvir.CastError` exception will be raised if the cast fails.
+Two exceptions may be raised from that call:
+
+* `System.EnvError` if the variable is not defined.
+* `Nvir.CastError` if the cast fails.
 
 ### Default values
 
-Calling `env!(var, caster, default)` will use the default value if the key is
-not defined.
+Calling `env!(var, caster, default)` will use the default value if and only if
+the key is not defined. There is no version of the function that would use the
+default value instead of the variable value.
 
 The function will **not** use the default value if the cast of an existing key
 fails. This will still raise an `Nvir.CastError`.
 
 The default value is not validated, so you can for instance call
-`env!("SOME_VAR", :integer, :infinity)`, whereas `:infinity` is not a valid
+`env!("SOME_VAR", :integer!, :infinity)`, whereas `:infinity` is not a valid
 integer.
 
-### Available Casters
 
-Casters come into three flavors:
+### Casting values
 
-* The "value as is" one.
-* The "nil" one with a `?` suffix that converts empty strings to `nil`. It will
-  however not fallback to the default value given to `env!/3` if the key exists.
-* The "bang" one with a `!` suffix that will raise an `Nvir.CastError` exception for
-  empty strings and special cases described below.
+Casters come into three flavors that behave differently when an environment variable value is an empty string.
 
-In some languages, using `null` where an integer is expected will cast the value
-to a "default value", generally `0` for integers. This is not the case in
-Elixir. To respect that, casters for such types behave the same with and without
-the `!` suffix. Namely, `:integer` and `:float` will raise for empty strings.
+* Casters suffixed with `!` like `:integer!` or `:string!` will raise if the
+  variable contains an empty string.
+* Casters suffixed with `?` like `:integer?` or `:string?` will convert empty
+  strings to `nil` instead of casting.
+* Casters without a suffix like `:string` or `:atom` exist for types that can be
+  cast from an empty string, _i.e._ the string type and atom types.
 
-It is however not the case for `:existing_atom`, because the `:""` atom is
-generally defined by the system long before an application starts, in Erlang
-just as in Elixir.
+See below for a complete list of built-in casters and custom casters.
 
 Empty strings occur when a variable is defined without a value:
 
@@ -430,6 +471,14 @@ Empty strings occur when a variable is defined without a value:
 HOST=localhost # value is "localhost"
 PORT=          # value is ""
 ```
+
+Remember, as long as the key exists, the default value is never used; this holds
+true for empty string values.
+
+* Calling `env!("PORT", :integer!, 4000)` will raise because `""` can't be cast
+  to an integer.
+* Calling `env!("PORT", :integer?, 4000)` will return `nil`.
+
 
 #### String Casters
 
@@ -466,13 +515,23 @@ PORT=          # value is ""
 | `:existing_atom?` | Like `:existing_atom` but empty strings becomes `nil`. |
 | `:existing_atom!` | Like `:existing_atom` but rejects empty strings. |
 
+Note that using `:existing_atom` with empty strings will not raise an exception
+because the `:""` atom is valid and is generally defined by the system on boot.
+
 #### Deprecated casters
 
-Those exist for legacy reasons and should not be used.
+Those exist for legacy reasons and should be avoided. They will trigger a
+runtime warning when used.
+
+In some languages, using `null` where an number is expected will cast the value
+to a _default type value_, generally `0` and `+0.0` for integers and floats.
+This behaviour does not exist in Elixir so casters for such types behave the
+same with and without the `!` suffix: `:integer` and `:float` will raise for
+empty strings.
 
 | Caster | Description |
 |--------|-------------|
-| `:boolean?` | Same as `:boolean`. |
+| `:boolean?` | Same as `:boolean`. ⚠️ Returns `false` instead of `nil` for empty strings. |
 | `:integer` | Same as `:integer!`. |
 | `:float` | Same as `:float!`. |
 

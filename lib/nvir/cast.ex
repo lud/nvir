@@ -101,7 +101,7 @@ defmodule Nvir.Cast do
   end
 
   # legacy
-  def cast(value, :boolean?), do: cast(value, :boolean)
+  def cast(value, :boolean?), do: warn_cast(value, :boolean?, :boolean)
 
   # -- Integer ----------------------------------------------------------------
 
@@ -118,7 +118,7 @@ defmodule Nvir.Cast do
   def cast(value, :integer?), do: cast(value, :integer!)
 
   # legacy
-  def cast(value, :integer), do: cast(value, :integer!)
+  def cast(value, :integer), do: warn_cast(value, :integer, :integer!)
 
   # -- Float ------------------------------------------------------------------
 
@@ -135,7 +135,7 @@ defmodule Nvir.Cast do
   def cast(value, :float?), do: cast(value, :float!)
 
   # legacy
-  def cast(value, :float), do: cast(value, :float!)
+  def cast(value, :float), do: warn_cast(value, :float, :float!)
 
   # -- Callback ---------------------------------------------------------------
 
@@ -164,5 +164,20 @@ defmodule Nvir.Cast do
 
   def cast(_, other) do
     raise ArgumentError, "unknown cast type: #{inspect(other)}"
+  end
+
+  defp warn_cast(value, deprecated, replacement) do
+    if Process.get(:nvir_deprecated_cast_warn, true) do
+      IO.warn(
+        "Environment variable caster #{inspect(deprecated)} is deprecated, use #{inspect(replacement)} instead."
+      )
+    end
+
+    cast(value, replacement)
+  end
+
+  @doc false
+  def ignore_warnings do
+    Process.put(:nvir_deprecated_cast_warn, false)
   end
 end
