@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0] - 2025-03-19
+
+### 🚀 Features
+
+- [**breaking**] Removed the :* tag as it was confusing
+
+### 📚 Documentation
+
+- Document dotenv!/env! independence (#16)
+
 ## [0.11.0] - 2025-03-14
 
 ### 🚀 Features
