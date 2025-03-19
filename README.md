@@ -72,7 +72,7 @@ scenarios. This is all described in the [documentation on
 hexdocs.pm](https://hexdocs.pm/nvir/readme.html) including the starter guides:
 
 * [Loading dotenv files](https://hexdocs.pm/nvir/loading-files.html)
-* [Reading environment variables](https://hexdocs.pm/nvir/the-env-functions.html).
+* [Reading environment variables](https://hexdocs.pm/nvir/the-env-functions.html)
 
 
 ## Interoperability
