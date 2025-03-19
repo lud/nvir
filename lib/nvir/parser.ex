@@ -2,22 +2,65 @@
 
 defmodule Nvir.Parser do
   @moduledoc """
-  A simple .env file parser.
+  A behaviour for environment variables sources parser.
+
+  The default implementation used in Nvir is `Nvir.Parser.RDB`. It can only
+  parse classic dotenv files.
+
+  Parsing other sources such as YAML files or encrypted files requires to
+  provide your own parser.
+
+  See the documentation of the `c:parse_file/1` callback for implementation
+  guidelines.
   """
 
   @type key :: String.t()
-  @type variable :: {key, binary | [binary | {:var, binary}]}
+  @type template :: [binary | {:var, binary}]
+  @type variable :: {key, binary | template}
 
   @doc """
-  Must rturn a list of variable definitions in a result tuple.
+  This callback must return a `{:ok, variables}` or `{:error, reason}` tuple.
 
-  Variables definitions are defined as lists of `{key, value}` tuples where the
-  `value` is either a string or a list of string and `{:var, string}` tuples.
+  The `variables` is a list of tuples `{key, value}` tuples where:
 
-  For instance, given this file content:
+  * `key` is a string
+  * `value` is either a string or a `template`
+  * A `template` is a list of chunks where each chunk is either a string or a
+    `{:var, varname}` tuple.
+
+  Templates are used for interpolation. When a variable uses interpolation, the
+  parser must not attempt to read the interpolated variables from environment,
+  but rather return a template instead of a binary value.
+
+  Variables used in interpolation within other variables values do not have to
+  exist in the file. Nvir uses a resolver to provide those values to execute the
+  templates.
+
+  In this example, the `INTRO` variable is defined in the same file, but the
+  `WHO` variable is not. This makes not difference, as the parser must not
+  require those values.
+
+      iex> file_contents = "INTRO=hello\\nGREETING=$INTRO $WHO!"
+      iex> Nvir.Parser.RDB.parse_string(file_contents)
+      {:ok, [{"INTRO", "hello"}, {"GREETING", [{:var, "INTRO"}, " ", {:var, "WHO"}, "!"]}]}
+
+  You can test and debug your parser by using `Nvir.interpolate_var/2` and a
+  simple resolver.
+
+      iex> file_contents = "GREETING=$INTRO $WHO!"
+      iex> {:ok, [{"GREETING", template}]} = Nvir.Parser.RDB.parse_string(file_contents)
+      iex> resolver = fn
+      ...>   "INTRO" -> "Hello"
+      ...>   "WHO" -> "World"
+      ...> end
+      iex> Nvir.interpolate_var(template, resolver)
+      "Hello World!"
+
+  ### Expected results examples
+
+  Given this file content:
 
   ```bash
-  # .env
   WHO=World
   GREETING=Hello $WHO!
   ```
@@ -32,87 +75,24 @@ defmodule Nvir.Parser do
     ]}
   ```
 
-  There is no need to handle different interpolation scenarios at the parser
-  level. This env file:
+  With this one using accumulative interpolation:
 
   ```bash
-  PATH=b
-  PATH=$PATH:c
-  PATH=a:$PATH
+  PATH=/usr/local/bin
+  PATH=$PATH:/usr/bin
+  PATH=/home/me/bin:$PATH
   ```
 
-  Should produce the following:
+  The parser should produce the following:
 
   ```elixir
   {:ok,
     [
-      {"PATH", "b"},
-      {"PATH", [{:var, "PATH"}, ":c"]},
-      {"PATH", ["a:", {:var, "PATH"}]}
+      {"PATH", "/usr/local/bin"},
+      {"PATH", [{:var, "PATH"}, ":/usr/bin"]},
+      {"PATH", ["/home/me/bin:", {:var, "PATH"}]}
     ]}
   ```
-
-  Interpolation will be handled by `Nvir.dotenv!/1` when variables will be
-  applied.
   """
   @callback parse_file(path :: String.t()) :: {:ok, [variable]} | {:error, Exception.t()}
-
-  @behaviour __MODULE__
-
-  # -- Entrypoint -------------------------------------------------------------
-
-  @impl true
-  @doc """
-  Parses the given env file. Implementation of the #{inspect(__MODULE__)}
-  Behaviour.
-  """
-  def parse_file(path) do
-    parse_string(File.read!(path))
-  end
-
-  def parse_string(content) do
-    case Nvir.Parser.RDB.parse(content) do
-      {:ok, tokens} -> {:ok, build_entries(:lists.flatten(tokens))}
-      {:error, reason} -> {:error, reason}
-    end
-  end
-
-  defp build_entries(entries) do
-    Enum.map(entries, &build_entry/1)
-  end
-
-  defp build_entry({:entry, k, v}), do: {build_key(k), build_value(v)}
-  defp build_key(k), do: List.to_string(k)
-
-  defp build_value(v) do
-    chunks = v |> :lists.flatten() |> chunk_value([], [])
-
-    if Enum.any?(chunks, &match?({:var, _}, &1)) do
-      chunks
-    else
-      :erlang.iolist_to_binary(chunks)
-    end
-  end
-
-  # optimization, skip empty chunk
-  defp chunk_value([{:var, _} = h | t], [], acc) do
-    chunk_value(t, [], [h | acc])
-  end
-
-  defp chunk_value([{:var, _} = h | t], chars, acc) do
-    chunk_value(t, [], [h, List.to_string(:lists.reverse(chars)) | acc])
-  end
-
-  defp chunk_value([h | t], chars, acc) do
-    chunk_value(t, [h | chars], acc)
-  end
-
-  # optimization, skip empty chunk
-  defp chunk_value([], [], acc) do
-    :lists.reverse(acc)
-  end
-
-  defp chunk_value([], chars, acc) do
-    :lists.reverse([List.to_string(:lists.reverse(chars)) | acc])
-  end
 end

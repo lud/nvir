@@ -1,7 +1,11 @@
 defmodule Nvir.Parser.RDB do
   require Record
 
-  @moduledoc false
+  @moduledoc """
+  This is the default Nvir parser, a recursive-descent parser with backtracing
+  support for dotenv files.
+  """
+  @behaviour Nvir.Parser
 
   @accented :lists.flatten([
               [?á, ?Á, ?à, ?À, ?â, ?Â, ?ä, ?Ä, ?ã, ?Ã, ?å, ?Å],
@@ -18,36 +22,67 @@ defmodule Nvir.Parser.RDB do
   @type buffer :: buffer()
   @type parser :: (buffer -> {:ok, term, buffer} | {:error, {atom, term, buffer()}})
 
-  @type value :: String.t()
+  # -- Entrypoint -------------------------------------------------------------
+
+  @impl true
+  @doc """
+  Parses the given dotenv file.
+  """
+  def parse_file(path) do
+    parse_string(File.read!(path))
+  end
 
   @doc """
-  Returns a list of `{key, value}` for all variables in the given content.
-
-  This function only parses strings, and will not attempt to read from a path.
-
-  Each returned value is either a string, or a list of chunks that are either a
-  binary or a `{:var, name}` tuple. Those values can be used with
-  `Nvir.interpolate_var/2` by providing a resolver calback that returns the
-  value of previous variables.
-
-  ### Resolver example
-
-      iex> file_contents = "GREETING=$INTRO $WHO!"
-      iex> {:ok, [{"GREETING", template}]} = Nvir.Parser.parse_string(file_contents)
-      iex> resolver = fn
-      ...>   "INTRO" -> "Hello"
-      ...>   "WHO" -> "World"
-      ...> end
-      iex> Nvir.interpolate_var(template, resolver)
-      "Hello World!"
-
-  When working with the system env you will likely use `&System.get_env(&1, "")`
-  as a resolver. It is common to use an empty string for undefined system
-  variables, but you can of course raise from your function if it better suits
-  your needs.
+  Parses the content of a dotenv file.
   """
+  def parse_string(content) do
+    case parse(content) do
+      {:ok, tokens} -> {:ok, build_entries(:lists.flatten(tokens))}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp build_entries(entries) do
+    Enum.map(entries, &build_entry/1)
+  end
+
+  defp build_entry({:entry, k, v}), do: {build_key(k), build_value(v)}
+  defp build_key(k), do: List.to_string(k)
+
+  defp build_value(v) do
+    chunks = v |> :lists.flatten() |> chunk_value([], [])
+
+    if Enum.any?(chunks, &match?({:var, _}, &1)) do
+      chunks
+    else
+      :erlang.iolist_to_binary(chunks)
+    end
+  end
+
+  # optimization, skip empty chunk
+  defp chunk_value([{:var, _} = h | t], [], acc) do
+    chunk_value(t, [], [h | acc])
+  end
+
+  defp chunk_value([{:var, _} = h | t], chars, acc) do
+    chunk_value(t, [], [h, List.to_string(:lists.reverse(chars)) | acc])
+  end
+
+  defp chunk_value([h | t], chars, acc) do
+    chunk_value(t, [h | chars], acc)
+  end
+
+  # optimization, skip empty chunk
+  defp chunk_value([], [], acc) do
+    :lists.reverse(acc)
+  end
+
+  defp chunk_value([], chars, acc) do
+    :lists.reverse([List.to_string(:lists.reverse(chars)) | acc])
+  end
+
   @spec parse(binary) :: {:ok, [Nvir.Parser.variable()]} | {:error, Exception.t()}
-  def parse(input) do
+  defp parse(input) do
     # path is only used for error reporting here
 
     buf = buffer(input, 1, 1)

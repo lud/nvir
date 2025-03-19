@@ -27,8 +27,13 @@ defmodule NvirTest do
     end)
   end
 
-  defp match_env(env) do
+  defp match_env(env) when is_atom(env) do
     Nvir.enable_sources(Nvir.dotenv_new(), env, true)
+  end
+
+  defp match_env(envs) when is_list(envs) do
+    conf = Map.new(envs, fn env when is_atom(env) -> {env, true} end)
+    Nvir.enable_sources(Nvir.dotenv_new(), conf)
   end
 
   describe "dotenv loaders" do
@@ -39,11 +44,6 @@ defmodule NvirTest do
     test "default loader should have test environment enabled" do
       # Because we are in a test here
       assert %{test: true} = Nvir.dotenv_loader().enabled_sources
-    end
-
-    test "default loader should have * environment enabled" do
-      # Because it is always on
-      assert %{*: true} = Nvir.dotenv_loader().enabled_sources
     end
 
     test "default loader should not have any before_env_set transformer" do
@@ -63,6 +63,16 @@ defmodule NvirTest do
         Nvir.dotenv_configure(Nvir.dotenv_loader(),
           enabled_sources: %{"docs" => true}
         )
+      end
+    end
+
+    test "cannot change the :overwrite tag" do
+      assert_raise ArgumentError, fn ->
+        Nvir.enable_sources(Nvir.dotenv_loader(), :overwrite, true)
+      end
+
+      assert_raise ArgumentError, fn ->
+        Nvir.enable_sources(Nvir.dotenv_loader(), :overwrite, false)
       end
     end
   end
@@ -88,17 +98,6 @@ defmodule NvirTest do
                  other: ["0", "0", "0"],
                  abc: ["3", abc: "4", other: "0"],
                  other: [abc: "0"]
-               )
-    end
-
-    test "collect from env and all" do
-      assert {["1", "2", "3", "4"], []} =
-               Nvir.collect_sources(match_env(:abc),
-                 abc: ["1"],
-                 *: ["2", abc: "3"],
-                 *: [other: "0"],
-                 abc: "4",
-                 other: [*: "0", abc: "0"]
                )
     end
 
@@ -133,14 +132,17 @@ defmodule NvirTest do
       # matched.
 
       assert {["1", "2"], ["1001", "1002", "1003", "1004", "1005"]} =
-               Nvir.collect_sources(%Nvir{enabled_sources: %{overwrite: true, abc: true}}, [
-                 "1",
-                 overwrite: ["1001", abc: ["1002"]],
-                 abc: ["2", overwrite: ["1003", other: "-1"]],
-                 other: [overwrite: "-2", abc: "-3"],
-                 abc: [overwrite: [abc: "1004", other: "-4"]],
-                 *: [overwrite: [abc: "1005", other: "-5"]]
-               ])
+               Nvir.collect_sources(
+                 %Nvir{enabled_sources: %{overwrite: true, abc: true, xyz: true}},
+                 [
+                   "1",
+                   overwrite: ["1001", abc: ["1002"]],
+                   abc: ["2", overwrite: ["1003", other: "-1"]],
+                   other: [overwrite: "-2", abc: "-3"],
+                   abc: [overwrite: [abc: "1004", other: "-4"]],
+                   xyz: [overwrite: [abc: "1005", other: "-5"]]
+                 ]
+               )
     end
 
     test "odd cases" do
@@ -393,85 +395,6 @@ defmodule NvirTest do
              } == changes
     end
 
-    test "using the wildcard, wildcard last" do
-      delete_key("COMMON")
-      delete_key("ONLY_DEV")
-      delete_key("ONLY_TEST")
-      delete_key("ONLY_STAR")
-
-      test_file =
-        create_file("""
-        COMMON=in test file
-        ONLY_TEST=in test file
-        """)
-
-      dev_file =
-        create_file("""
-        COMMON=in dev file
-        ONLY_DEV=in dev file
-        """)
-
-      star_file =
-        create_file("""
-        COMMON=in * file
-        ONLY_STAR=in * file
-        """)
-
-      changes = Nvir.dotenv!(test: test_file, *: star_file, dev: dev_file)
-
-      assert "in * file" = System.fetch_env!("COMMON")
-      assert "in test file" = System.fetch_env!("ONLY_TEST")
-      assert "in * file" = System.fetch_env!("ONLY_STAR")
-      assert :error = System.fetch_env("ONLY_DEV")
-
-      assert %{
-               "COMMON" => "in * file",
-               "ONLY_STAR" => "in * file",
-               "ONLY_TEST" => "in test file"
-             } == changes
-    end
-
-    test "using the wildcard, wildcard first" do
-      # There is no precedence between the current env (test/dev) and the
-      # wildcard, so whoever comes last wins.
-
-      delete_key("COMMON")
-      delete_key("ONLY_DEV")
-      delete_key("ONLY_TEST")
-      delete_key("ONLY_STAR")
-
-      test_file =
-        create_file("""
-        COMMON=in test file
-        ONLY_TEST=in test file
-        """)
-
-      dev_file =
-        create_file("""
-        COMMON=in dev file
-        ONLY_DEV=in dev file
-        """)
-
-      star_file =
-        create_file("""
-        COMMON=in * file
-        ONLY_STAR=in * file
-        """)
-
-      changes = Nvir.dotenv!(*: star_file, test: test_file, dev: dev_file)
-
-      assert "in test file" = System.fetch_env!("COMMON")
-      assert "in test file" = System.fetch_env!("ONLY_TEST")
-      assert "in * file" = System.fetch_env!("ONLY_STAR")
-      assert :error = System.fetch_env("ONLY_DEV")
-
-      assert %{
-               "COMMON" => "in test file",
-               "ONLY_STAR" => "in * file",
-               "ONLY_TEST" => "in test file"
-             } == changes
-    end
-
     test "non existing files" do
       delete_key("ADDED")
 
@@ -481,7 +404,7 @@ defmodule NvirTest do
         """)
 
       assert %{"ADDED" => _} =
-               Nvir.dotenv!(["f1", test: "f2", test: ["f3"], *: [overwrite: "f4"], *: real_file])
+               Nvir.dotenv!(["f1", test: "f2", test: ["f3"]] ++ [[overwrite: "f4"], real_file])
 
       assert "in real file" = System.fetch_env!("ADDED")
     end
@@ -948,6 +871,24 @@ defmodule NvirTest do
 
       # bad function will not be called if we use the default
       assert 9999 = Nvir.env!("NON_EXISTING", fn "hello" -> :bad_return_value end, 9999)
+    end
+
+    test "custom cast returning cast error" do
+      put_key("SOME_INT", "hello")
+
+      valid_error!(
+        assert_raise Nvir.CastError, fn ->
+          Nvir.env!("SOME_INT", fn "hello" -> Nvir.cast("hello", :integer!) end, 9999)
+        end
+      )
+    end
+
+    test "custom cast returning unknown reason" do
+      put_key("SOME_INT", "hello")
+
+      assert_raise RuntimeError, ~r/invalid return value from custom validator/, fn ->
+        Nvir.env!("SOME_INT", fn "hello" -> {:error, :something_strange} end)
+      end
     end
 
     test "invalid cast cast" do

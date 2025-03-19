@@ -12,7 +12,7 @@ defmodule Nvir do
 
   @enforce_keys [:enabled_sources]
   defstruct enabled_sources: %{},
-            parser: Nvir.Parser,
+            parser: Nvir.Parser.RDB,
             cd: nil,
             before_env_set: nil
 
@@ -26,6 +26,7 @@ defmodule Nvir do
           | {:parser, module}
           | {:cd, nil | Path.t()}
           | {:before_env_set, transformer}
+  @type template_resolver :: (String.t() -> nil | String.t())
 
   @doc """
   Returns a configuration for `dotenv!/2` without any enabled source.
@@ -69,7 +70,7 @@ defmodule Nvir do
   See the "Predefined tags" section on the `dotenv!/1` documentation.
   """
   def default_enabled_sources do
-    defaults = %{*: true}
+    defaults = %{}
 
     defaults =
       case guess_env() do
@@ -133,7 +134,7 @@ defmodule Nvir do
     source tags will be enabled when collecting sources. Defaults to the return
     value of `default_enabled_sources/0`.
   * `:parser` - The module to parse environment variables files. Defaults to
-    `Nvir.Parser`.
+    `Nvir.Parser.RDB`.
   * `:cd` - A directory path to load relative source paths from.
   * `:before_env_set` - A function that accepts a `{varname, value}` tuple and
     must return a similar tuple. This gives the possibility to change or
@@ -158,7 +159,7 @@ defmodule Nvir do
           rel: env!("RELEASE_NAME", :boolean, false)
         },
 
-        # Load env files relative to this directory
+        # Load dotenv files relative to this directory
         cd: "~/projects/apps/envs"
       )
       |> dotenv!(
@@ -182,9 +183,8 @@ defmodule Nvir do
   defp valid_opt?({:enabled_sources, flags}) do
     (is_list(flags) or is_map(flags)) and
       Enum.all?(flags, fn
-        {:overwrite, v} ->
-          IO.warn("enabling source :overwrite has no effect")
-          is_boolean(v)
+        {:overwrite, _} ->
+          raise ArgumentError, "changing the :overwrite tag is not allowed"
 
         {k, v} ->
           is_atom(k) and is_boolean(v)
@@ -207,12 +207,12 @@ defmodule Nvir do
 
       Nvir.dotenv_loader()
       |> Nvir.enable_sources(:custom, true)
-      |> Nvir.dotenv!(["global.env", {:custom,  "local.env"}])
+      |> Nvir.dotenv!(["global.env", custom: "local.env"])
 
   Whereas the following call will only load files that are not wrapped in a tag.
 
       Nvir.dotenv_loader()
-      |> Nvir.dotenv!(["global.env", {:custom,  "local.env"}])
+      |> Nvir.dotenv!(["global.env", custom: "local.env"])
 
   It is also possible to disable some defaults by overriding them. In the
   following code, the `.env.test` file will never be loaded:
@@ -223,16 +223,26 @@ defmodule Nvir do
 
   """
   def enable_sources(nvir, tag, enabled?) when is_atom(tag) and is_boolean(enabled?) do
-    %__MODULE__{nvir | enabled_sources: Map.put(nvir.enabled_sources, tag, enabled?)}
-  end
-
-  def enable_sources(nvir, enum) when is_list(enum) when is_map(enum) do
-    {_, _} = validate_opt!({:enabled_sources, enum})
-    %__MODULE__{nvir | enabled_sources: Map.merge(nvir.enabled_sources, Map.new(enum))}
+    dotenv_configure(nvir, enabled_sources: Map.put(nvir.enabled_sources, tag, enabled?))
   end
 
   @doc """
-  Loads specified env files in the system environment. Intended usage is from
+  Like `enable_sources/3` but accepts a keyword list or map of sources.
+
+
+      Nvir.dotenv_loader()
+      |> Nvir.enable_sources(
+        custom: true,
+        docs: config_env() == :docs
+      )
+      |> Nvir.dotenv!(["global.env", custom: "local.env", docs: "docs.env"])
+  """
+  def enable_sources(nvir, enum) when is_list(enum) when is_map(enum) do
+    dotenv_configure(nvir, enabled_sources: Map.merge(nvir.enabled_sources, Map.new(enum)))
+  end
+
+  @doc """
+  Loads specified dotenv files in the system environment. Intended usage is from
   `config/runtime.exs` in your project
 
   Variables defined in the files will not overwrite the system environment if
@@ -271,7 +281,6 @@ defmodule Nvir do
 
       # Load files depending on environment
       dotenv!(
-        *: ".env",
         dev: ".env.dev",
         test: ".env.test"
       )
@@ -304,16 +313,12 @@ defmodule Nvir do
 
   Tags are enabled under different circumstances.
 
-  #### Always enabled
-
-  * `:*` -  Acts as a syntactic sugar to avoid mixing keyword lists and strings.
-
   #### Mix environment
 
   * `:dev` - When `Config.config_env()` or `Mix.env()` is `:dev`.
   * `:test` - When `Config.config_env()` or `Mix.env()` is `:test`.
 
-  There is no predefined tag for `:prod` as using .env files in production is
+  There is no predefined tag for `:prod` as using dotenv files in production is
   strongly discouraged.
 
   #### Continuous integration
@@ -336,7 +341,7 @@ defmodule Nvir do
   end
 
   @doc """
-  Same as `dotenv!/1` but accepts a custom configuration to load env files.
+  Same as `dotenv!/1` but accepts a custom configuration to load dotenv files.
   """
   @spec dotenv!(t, sources) :: %{binary => binary}
   def dotenv!(nvir, sources) do
@@ -396,7 +401,6 @@ defmodule Nvir do
 
   defp match_tags([], _enabled, kind), do: kind
   defp match_tags([:overwrite | t], enabled, _kind), do: match_tags(t, enabled, :overwrite)
-  defp match_tags([:* | t], enabled, kind), do: match_tags(t, enabled, kind)
 
   defp match_tags([h | t], enabled, kind) when :erlang.map_get(h, enabled),
     do: match_tags(t, enabled, kind)
@@ -565,16 +569,20 @@ defmodule Nvir do
   Takes a parsed value returned by the parser implementation, and a resolver
   for the interpolated variables.
 
+  A resolver is a function that takes a variable name and returns a string or
+  `nil`.
+
   ### Example
 
       iex> envfile = """
       iex> GREETING=Hello $NAME!
       iex> """
-      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.parse_string(envfile)
+      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.RDB.parse_string(envfile)
       iex> resolver = fn "NAME" -> "World" end
       iex> Nvir.interpolate_var(variable, resolver)
       "Hello World!"
   '''
+  @spec interpolate_var(String.t(), template_resolver) :: String.t()
   def interpolate_var(string, _resolver) when is_binary(string) do
     string
   end
@@ -584,8 +592,18 @@ defmodule Nvir do
   end
 
   defp interpolate_chunks([{:var, key} | t], resolver) do
-    chunk_value = resolver.(key)
-    true = is_binary(chunk_value)
+    chunk_value =
+      case resolver.(key) do
+        nil ->
+          ""
+
+        binary when is_binary(binary) ->
+          binary
+
+        other ->
+          raise "resolver must return a string for variable #{inspect(key)}, got: #{inspect(other)}"
+      end
+
     [chunk_value | interpolate_chunks(t, resolver)]
   end
 

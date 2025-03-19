@@ -1,6 +1,6 @@
 defmodule Nvir.LoadError do
   @moduledoc """
-  Exception raised when `Nvir` failed to parse an env file.
+  Exception raised when `Nvir.dotenv!/1` fails to parse a dotenv file.
   """
   defexception [:reason, :path]
 

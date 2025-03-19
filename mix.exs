@@ -18,23 +18,39 @@ defmodule Nvir.MixProject do
       versioning: versioning(),
       docs: [
         main: "readme",
+        extra_section: "GUIDES",
         source_ref: "v#{@version}",
         source_url: @source_url,
-        extras: extras()
+        extras: doc_extras(),
+        groups_for_extras: groups_for_extras()
       ]
     ]
   end
 
-  def extras do
+  def doc_extras do
     [
-      "README.md"
+      "README.md",
+      "CHANGELOG.md",
+      "guides/file-loading/loading-files.md",
+      "guides/file-loading/custom-loaders.md",
+      "guides/var-reading/the-env-functions.md",
+      "guides/dotenv-format/dotenv-syntax.md",
+      "guides/dotenv-format/variables-inheritance.md"
+    ]
+  end
+
+  defp groups_for_extras do
+    [
+      "Loading Files": ~r/guides\/file-loading\/.?/,
+      "Reading Variables": ~r/guides\/var-reading\/.?/,
+      "Dotenv Format": ~r/guides\/dotenv-format\/.?/
     ]
   end
 
   defp package do
     [
       description:
-        "A fully-featured dotenv parser with environment variables helpers. Fork of Dotenvy with fallback to system environment variables.",
+        "A fully-featured dotenv parser with environment variables helpers. Inspired from Dotenvy but using system environment by default.",
       licenses: ["MIT"],
       links: %{"Github" => @source_url, "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"},
       maintainers: ["Ludovic Demblans <ludovic@demblans.com>"]

@@ -1,6 +1,6 @@
 defmodule Nvir.CastError do
   @moduledoc """
-  Exception defining an invalid cast. For instance with this env file:
+  Exception defining an invalid cast. For instance with this dotenv file:
 
       NOT_AN_INT=some string
 

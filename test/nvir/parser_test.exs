@@ -6,7 +6,7 @@ defmodule Nvir.ParserTest do
   doctest Nvir.Parser.RDB
 
   defp parse(string) do
-    Nvir.Parser.parse_string(string)
+    Nvir.Parser.RDB.parse_string(string)
   end
 
   defp parse_map!(string) do
@@ -453,6 +453,18 @@ defmodule Nvir.ParserTest do
                double: ''
                '''
                """)
+
+      # The \' escape is allowed, though not useful
+
+      assert %{"A" => ~s(on ' line\nat end '\n'\ndouble: ''\n)} =
+               parse_map!(~S"""
+               A='''
+               on \' line
+               at end \'
+               \'
+               double: \'\'
+               '''
+               """)
     end
   end
 
@@ -469,6 +481,20 @@ defmodule Nvir.ParserTest do
 
       assert "hello world" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
       assert "hello world" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
+    end
+
+    test "when resolver returns nil" do
+      assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
+               parse_map!("""
+               ENCLOSED=hello ${WHO}
+               NODELIM=hello $WHO
+               """)
+
+      assert ["hello ", {:var, "WHO"}] == enclosed
+      assert ["hello ", {:var, "WHO"}] == nodelim
+
+      assert "hello " = Nvir.interpolate_var(enclosed, fn "WHO" -> nil end)
+      assert "hello " = Nvir.interpolate_var(nodelim, fn "WHO" -> nil end)
     end
 
     test "in double quoted value" do
