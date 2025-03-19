@@ -68,7 +68,10 @@ advanced guide that covers all configuration and usage options.
 
 Nvir provides advanced capabilities to work with your dotenv files in different
 scenarios. This is all described in the [documentation on
-hexdocs.pm](https://hexdocs.pm/nvir/readme.html).
+hexdocs.pm](https://hexdocs.pm/nvir/readme.html) including the starter guides:
+
+* [Loading dotenv files](https://hexdocs.pm/nvir/loading-files.html)
+* [Reading environment variables](https://hexdocs.pm/nvir/the-env-functions.html).
 
 
 ## Interoperability
