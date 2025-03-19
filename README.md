@@ -60,8 +60,9 @@ config :my_app, MyApp.Repo,
   port: env!("DB_PORT", :integer!, 5432)
 ```
 
-This is most of what you need to know to start using this library. Below is an
-advanced guide that covers all configuration and usage options.
+This is most of what you need to know to start using this library.
+
+Please refer to the documentation for advanced usage.
 
 
 ## Documentation
