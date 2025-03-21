@@ -1,13 +1,13 @@
 # Loading dotenv files
 
-This page describes how to work with one or multiple dotenv files, how to load them.
+This page describes different scenarios for using the `dotenv!/1` function.
 
-We will also describe advanced configuration for the loader.
-
-Note that every configuration is optional. You can just start with a single `".env"` source and focus on your actual code.
-
-The dotenv files should always be loaded from your `config/runtime.exs` file.
+Dotenv files should always be loaded from your `config/runtime.exs` file.
 You may have to create it yourself if it does not exist.
+
+## Loading a single file
+
+This is the classic dotenv experience.
 
 ```elixir
 # config/runtime.exs
@@ -79,11 +79,11 @@ dotenv!(
 It is also valid to pass the same key multiple times:
 
 ```elixir
-dotenv!([
+dotenv!(
   dev: ".env",
   test: ".env.test"
   test: ".env.test.local"
-])
+)
 ```
 
 ### Predefined tags
@@ -97,8 +97,8 @@ See the custom loaders documentation to know how to define your own tags.
 * `:dev` - When `Config.config_env()` or `Mix.env()` is `:dev`.
 * `:test` - When `Config.config_env()` or `Mix.env()` is `:test`.
 
-There is no predefined tag for `:prod` as using dotenv files in production is
-strongly discouraged.
+There is no predefined tag for `:prod`. Using dotenv files in production is an
+anti-pattern. The guide on custom loaders will help you if you really need to.
 
 #### Continuous integration
 
@@ -193,8 +193,7 @@ indirectly. The `:overwrite` tag around `4.env` is useless.
 
 ## Load order
 
-The `dotenv!/1` function follows a couple rules when loading the different
-sources:
+The `dotenv!/1` function follows a couple rules when loading multiple sources:
 
 * Files are separated in two groups, "regular" and "overwrites".
 * Within each group, files are always loaded in order of appearance in the
@@ -218,7 +217,8 @@ last. But `.env1` will always be loaded before `.env2`.
 dotenv!(overwrite: ".env.local", dev: ".env1", dev: ".env2")
 ```
 
-In this example, the files are named in loading order (without regard for enabled or disabled tags):
+In the following example, files are named in load order (without regard for
+enabled or disabled tags).
 
 ```elixir
 dotenv!(

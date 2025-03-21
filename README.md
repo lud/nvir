@@ -37,9 +37,6 @@ You will generally use Nvir from your `config/runtime.exs` file.
 * Use `env!/2` to require a variable and validate it.
 * Use `env!/3` to provide a default value.
 
-Note that you do not have to call `dotenv!/1` to use the `env` functions. You can
-use this library for validation only.
-
 ```elixir
 # runtime.exs
 
@@ -105,17 +102,16 @@ dns_config = fetch_env_as_json!("DNS_CONFIG_JSON")
 ## Difference with Dotenvy
 
 Dotenvy loads the dotenv files in the process dictionary of the process
-executing `runtime.exs`. The defined variables are meant to be _part of_ your
+executing `runtime.exs`. The defined variables are only used to define
 application configuration.
 
-The `System.fetch_env/1` function and other variants
-cannot see those variables unless you tells the Dotenvy loader to actually patch
-the environment.
+The `System.fetch_env/1` function and other variants cannot see those variables
+unless you pass `side_effect: &System.put_env/1`, but then their `env!` function cannot find the variables.
 
 Nvir philosophy is that the dotenv files are only patches for the environment
 _around_ the application, and so the application should always be able to use
 those variables from anywhere with `System.fetch_env/1` or `Nvir.env!/2`.
 
-So Nvir will _always_ patch the system environment. The development environment
-and production environment will use the same code paths. This also works well
-with libraries that expect some environment variables to be defined.
+Nvir will _always_ patch the system environment. The development environment and
+production environment will use the same code paths. This also works well with
+libraries that expect some environment variables to be defined.
