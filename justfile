@@ -13,4 +13,7 @@ docs:
 _git_status:
   git status
 
-check: format _mix_check docs _git_status
+readme:
+  mix rdmx.update README.md
+
+check: format _mix_check docs readme _git_status

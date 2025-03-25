@@ -1,9 +1,14 @@
 # Nvir – Elixir environment variables made simple
 
-[![Hex.pm Version](https://img.shields.io/hexpm/v/nvir?color=4e2a8e)](https://hex.pm/packages/nvir)
-[![GitHub Actions Workflow Status](https://img.shields.io/github/actions/workflow/status/lud/nvir/elixir.yaml?label=CI)](https://github.com/lud/nvir/actions/workflows/elixir.yaml)
+<!-- rdmx :badges
+    hexpm         : "nvir?color=4e2a8e"
+    github_action : "lud/nvir/elixir.yaml?label=CI&branch=main"
+    license       : nvir
+    -->
+[![hex.pm Version](https://img.shields.io/hexpm/v/nvir?color=4e2a8e)](https://hex.pm/packages/nvir)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/lud/nvir/elixir.yaml?label=CI&branch=main)](https://github.com/lud/nvir/actions/workflows/elixir.yaml?query=branch%3Amain)
 [![License](https://img.shields.io/hexpm/l/nvir.svg)](https://hex.pm/packages/nvir)
-
+<!-- rdmx /:badges -->
 Nvir is a powerful environment variable loader for Elixir that provides:
 
 * Simple loading of dotenv files with support for inheritance and interpolation.
@@ -20,13 +25,17 @@ experience.
 
 As usual, pull the library from your `mix.exs` file.
 
+<!-- rdmx :app_dep runtime:false vsn:$app_vsn -->
 ```elixir
 def deps do
   [
-    {:nvir, "~> 0.12"},
+    {:nvir, "~> 0.12", runtime: false},
   ]
 end
 ```
+<!-- rdmx /:app_dep -->
+
+
 
 
 ## Basic Usage

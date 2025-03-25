@@ -74,7 +74,9 @@ defmodule Nvir.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.22.0", only: :dev, runtime: false}
+      {:doctor, "~> 0.22.0", only: :dev, runtime: false},
+      {:readmix, "~> 0.1", only: [:dev, :test], runtime: false},
+      {:mix_version, "~> 2.3", only: :dev, runtime: false}
     ]
   end
 
@@ -115,12 +117,7 @@ defmodule Nvir.MixProject do
   end
 
   def update_readme(vsn) do
-    version = Version.parse!(vsn)
-    readme_vsn = "#{version.major}.#{version.minor}"
-    readme = File.read!("README.md")
-    re = ~r/:nvir, "~> \d+\.\d+"/
-    readme = String.replace(readme, re, ":nvir, \"~> #{readme_vsn}\"")
-    File.write!("README.md", readme)
+    :ok = Readmix.update_file(Readmix.new(vars: %{app_vsn: vsn}), "README.md")
     :ok
   end
 
