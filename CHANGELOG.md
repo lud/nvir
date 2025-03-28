@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0] - 2025-03-28
+
+### 🚀 Features
+
+- Only define functions with 'env' in their name for 'import Nvir'
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Elixir workflow (#18)
+
 ## [0.12.0] - 2025-03-19
 
 ### 🚀 Features
