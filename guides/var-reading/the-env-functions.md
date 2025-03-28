@@ -23,7 +23,8 @@ port = env!("PORT", :integer!, 4000)
 ## Requiring a variable
 
 To fetch a variable, call `env!/2` with the variable name and an optional
-caster. The built-in casters are described later in this document.
+caster. A caster is either a built-in caster (given as an atom) or a custom
+caster. See later for a description of both.
 
 ```elixir
 env!("PORT", :integer!)
@@ -64,9 +65,10 @@ env!("TIMEOUT", :integer!, :infinity)
 ```
 
 
-## Casting values
+## Built-in Casters
 
-Casters come into three flavors that behave differently when an environment variable value is an empty string.
+Built-in casters are defined as atoms. There are three flavors that behave
+differently when an environment variable value is an empty string.
 
 * Casters suffixed with `!` like `:integer!` or `:string!` will raise if the
   variable contains an empty string.
@@ -93,6 +95,7 @@ With `PORT=""` in the environment:
   to an integer.
 * Calling `env!("PORT", :integer?, 4000)` will return `nil`.
 
+<!-- rdmx :section name:available_casters -->
 
 ### String Casters
 
@@ -149,6 +152,7 @@ raise for empty strings.
 | `:integer` | Same as `:integer!`. |
 | `:float` | Same as `:float!`. |
 
+<!-- rdmx /:section -->
 
 ## Custom Casters
 
@@ -163,11 +167,13 @@ env!("URL", fn
 end)
 ```
 
-It is also possible to return directly an error from `Nvir.cast/2`:
+It is also possible to return errors from `Nvir.Cast.cast/2`. (Those are not
+strings but they are properly handled.)
+
 
 ```elixir
 env!("PORT", fn value ->
-  case Nvir.cast(value, :integer!) do
+  case Nvir.Cast.cast(value, :integer!) do
     {:ok, port} when port > 1024 -> {:ok, port}
     {:ok, port} -> {:error, "invalid port: #{port}"}
     {:error, reason} -> {:error, reason}

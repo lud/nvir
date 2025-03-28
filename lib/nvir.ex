@@ -26,7 +26,6 @@ defmodule Nvir do
           | {:parser, module}
           | {:cd, nil | Path.t()}
           | {:before_env_set, transformer}
-  @type template_resolver :: (String.t() -> nil | String.t())
 
   @doc """
   Returns a configuration for `dotenv!/2` without any enabled source.
@@ -59,7 +58,7 @@ defmodule Nvir do
   """
   @spec dotenv_loader :: t
   def dotenv_loader do
-    dotenv_configure(dotenv_new(), enabled_sources: default_enabled_sources())
+    dotenv_configure(dotenv_new(), enabled_sources: default_dotenv_sources())
   end
 
   @doc """
@@ -69,7 +68,7 @@ defmodule Nvir do
 
   See the "Predefined tags" section on the `dotenv!/1` documentation.
   """
-  def default_enabled_sources do
+  def default_dotenv_sources do
     defaults = %{}
 
     defaults =
@@ -95,6 +94,12 @@ defmodule Nvir do
       end
 
     defaults
+  end
+
+  @doc false
+  @deprecated "Use `default_dotenv_sources/0`"
+  def default_enabled_sources do
+    default_dotenv_sources()
   end
 
   defp guess_env do
@@ -222,23 +227,34 @@ defmodule Nvir do
       |> Nvir.dotenv!(["global.env", dev: ".env.dev", test: ".env.test"])
 
   """
-  def enable_sources(nvir, tag, enabled?) when is_atom(tag) and is_boolean(enabled?) do
+  def dotenv_enable_sources(nvir, tag, enabled?) when is_atom(tag) and is_boolean(enabled?) do
     dotenv_configure(nvir, enabled_sources: Map.put(nvir.enabled_sources, tag, enabled?))
   end
 
-  @doc """
-  Like `enable_sources/3` but accepts a keyword list or map of sources.
+  @deprecated "Use `dotenv_enable_sources/3`"
+  @doc false
+  def enable_sources(nvir, tag, enabled?) when is_atom(tag) and is_boolean(enabled?) do
+    dotenv_enable_sources(nvir, tag, enabled?)
+  end
 
+  @doc """
+  Like `dotenv_enable_sources/3` but accepts a keyword list or map of sources.
 
       Nvir.dotenv_loader()
-      |> Nvir.enable_sources(
+      |> Nvir.dotenv_enable_source(
         custom: true,
         docs: config_env() == :docs
       )
       |> Nvir.dotenv!(["global.env", custom: "local.env", docs: "docs.env"])
   """
-  def enable_sources(nvir, enum) when is_list(enum) when is_map(enum) do
+  def dotenv_enable_sources(nvir, enum) when is_list(enum) when is_map(enum) do
     dotenv_configure(nvir, enabled_sources: Map.merge(nvir.enabled_sources, Map.new(enum)))
+  end
+
+  @deprecated "Use `dotenv_enable_sources/2`"
+  @doc false
+  def enable_sources(nvir, enum) when is_list(enum) when is_map(enum) do
+    dotenv_enable_sources(nvir, enum)
   end
 
   @doc """
@@ -559,59 +575,17 @@ defmodule Nvir do
     end
   end
 
+  @doc false
+  @deprecated "Use Nvir.Cast.cast/2"
   defdelegate cast(value, caster), to: Nvir.Cast
 
   defp cast_error(var, caster, reason) do
     %Nvir.CastError{var: var, caster: caster, reason: reason}
   end
 
-  @doc ~S'''
-  Takes a parsed value returned by the parser implementation, and a resolver
-  for the interpolated variables.
-
-  A resolver is a function that takes a variable name and returns a string or
-  `nil`.
-
-  ### Example
-
-      iex> envfile = """
-      iex> GREETING=Hello $NAME!
-      iex> """
-      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.RDB.parse_string(envfile)
-      iex> resolver = fn "NAME" -> "World" end
-      iex> Nvir.interpolate_var(variable, resolver)
-      "Hello World!"
-  '''
-  @spec interpolate_var(String.t(), template_resolver) :: String.t()
-  def interpolate_var(string, _resolver) when is_binary(string) do
-    string
-  end
-
-  def interpolate_var(chunks, resolver) when is_list(chunks) do
-    :erlang.iolist_to_binary(interpolate_chunks(chunks, resolver))
-  end
-
-  defp interpolate_chunks([{:var, key} | t], resolver) do
-    chunk_value =
-      case resolver.(key) do
-        nil ->
-          ""
-
-        binary when is_binary(binary) ->
-          binary
-
-        other ->
-          raise "resolver must return a string for variable #{inspect(key)}, got: #{inspect(other)}"
-      end
-
-    [chunk_value | interpolate_chunks(t, resolver)]
-  end
-
-  defp interpolate_chunks([h | t], resolver) do
-    [h | interpolate_chunks(t, resolver)]
-  end
-
-  defp interpolate_chunks([], _resolver) do
-    []
+  @doc false
+  @deprecated "Use `Nvir.Parser.interpolate_var/2`"
+  def interpolate_var(chunks, resolver) do
+    Nvir.Parser.interpolate_var(chunks, resolver)
   end
 end

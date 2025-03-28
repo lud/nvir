@@ -75,7 +75,7 @@ defmodule Nvir.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22.0", only: :dev, runtime: false},
-      {:readmix, "~> 0.1", only: [:dev, :test], runtime: false},
+      {:readmix, "~> 0.3", only: [:dev, :test], runtime: false},
       {:mix_version, "~> 2.3", only: :dev, runtime: false}
     ]
   end

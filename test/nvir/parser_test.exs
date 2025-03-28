@@ -1,4 +1,5 @@
 defmodule Nvir.ParserTest do
+  alias Nvir.Parser
   alias Nvir.Parser.ParseError
   use ExUnit.Case, async: false
 
@@ -479,8 +480,8 @@ defmodule Nvir.ParserTest do
       assert ["hello ", {:var, "WHO"}] == enclosed
       assert ["hello ", {:var, "WHO"}] == nodelim
 
-      assert "hello world" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
-      assert "hello world" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
+      assert "hello world" = Parser.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "when resolver returns nil" do
@@ -493,8 +494,8 @@ defmodule Nvir.ParserTest do
       assert ["hello ", {:var, "WHO"}] == enclosed
       assert ["hello ", {:var, "WHO"}] == nodelim
 
-      assert "hello " = Nvir.interpolate_var(enclosed, fn "WHO" -> nil end)
-      assert "hello " = Nvir.interpolate_var(nodelim, fn "WHO" -> nil end)
+      assert "hello " = Parser.interpolate_var(enclosed, fn "WHO" -> nil end)
+      assert "hello " = Parser.interpolate_var(nodelim, fn "WHO" -> nil end)
     end
 
     test "in double quoted value" do
@@ -507,8 +508,8 @@ defmodule Nvir.ParserTest do
       assert ["hello ", {:var, "WHO"}] = enclosed
       assert ["hello ", {:var, "WHO"}] = nodelim
 
-      assert "hello world" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
-      assert "hello world" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
+      assert "hello world" = Parser.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "in double quoted multiline" do
@@ -525,8 +526,8 @@ defmodule Nvir.ParserTest do
       assert ["hello ", {:var, "WHO"}, "\n"] == enclosed
       assert ["hello ", {:var, "WHO"}, "\n"] == nodelim
 
-      assert "hello world\n" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
-      assert "hello world\n" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
+      assert "hello world\n" = Parser.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "hello world\n" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "double quoted multiline whole line" do
@@ -543,8 +544,8 @@ defmodule Nvir.ParserTest do
       assert [{:var, "WHO"}, "\n"] == enclosed
       assert [{:var, "WHO"}, "\n"] == nodelim
 
-      assert "world\n" = Nvir.interpolate_var(enclosed, fn "WHO" -> "world" end)
-      assert "world\n" = Nvir.interpolate_var(nodelim, fn "WHO" -> "world" end)
+      assert "world\n" = Parser.interpolate_var(enclosed, fn "WHO" -> "world" end)
+      assert "world\n" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
     test "in single quoted, no interpolation" do
@@ -568,7 +569,7 @@ defmodule Nvir.ParserTest do
     end
 
     defp build_sentence(map, vars) do
-      Nvir.interpolate_var(Map.fetch!(map, "SENTENCE"), fn key -> Map.get(vars, key, "") end)
+      Parser.interpolate_var(Map.fetch!(map, "SENTENCE"), fn key -> Map.get(vars, key, "") end)
     end
 
     test "edge case - vars on both ends" do

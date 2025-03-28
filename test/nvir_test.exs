@@ -1,4 +1,5 @@
 defmodule NvirTest do
+  alias Nvir.Cast
   use ExUnit.Case, async: false
 
   doctest Nvir
@@ -28,12 +29,12 @@ defmodule NvirTest do
   end
 
   defp match_env(env) when is_atom(env) do
-    Nvir.enable_sources(Nvir.dotenv_new(), env, true)
+    Nvir.dotenv_enable_sources(Nvir.dotenv_new(), env, true)
   end
 
   defp match_env(envs) when is_list(envs) do
     conf = Map.new(envs, fn env when is_atom(env) -> {env, true} end)
-    Nvir.enable_sources(Nvir.dotenv_new(), conf)
+    Nvir.dotenv_enable_sources(Nvir.dotenv_new(), conf)
   end
 
   describe "dotenv loaders" do
@@ -68,11 +69,11 @@ defmodule NvirTest do
 
     test "cannot change the :overwrite tag" do
       assert_raise ArgumentError, fn ->
-        Nvir.enable_sources(Nvir.dotenv_loader(), :overwrite, true)
+        Nvir.dotenv_enable_sources(Nvir.dotenv_loader(), :overwrite, true)
       end
 
       assert_raise ArgumentError, fn ->
-        Nvir.enable_sources(Nvir.dotenv_loader(), :overwrite, false)
+        Nvir.dotenv_enable_sources(Nvir.dotenv_loader(), :overwrite, false)
       end
     end
   end
@@ -739,7 +740,7 @@ defmodule NvirTest do
       )
 
       # legacy :integer has the same behaviour as :integer!
-      Nvir.Cast.ignore_warnings()
+      Cast.ignore_warnings()
 
       valid_error!(
         assert_raise Nvir.CastError, ~r/empty value/, fn ->
@@ -878,7 +879,7 @@ defmodule NvirTest do
 
       valid_error!(
         assert_raise Nvir.CastError, fn ->
-          Nvir.env!("SOME_INT", fn "hello" -> Nvir.cast("hello", :integer!) end, 9999)
+          Nvir.env!("SOME_INT", fn "hello" -> Cast.cast("hello", :integer!) end, 9999)
         end
       )
     end
@@ -972,7 +973,6 @@ defmodule NvirTest do
       assert %{"USING_CWD" => "nope"} =
                Nvir.dotenv_loader()
                |> Nvir.dotenv_configure(cd: dir)
-               # passing the relative filename
                |> Nvir.dotenv!(filename)
 
       # ...they are now defined
@@ -995,7 +995,6 @@ defmodule NvirTest do
       assert %{"USING_CHARDATA" => "yes"} =
                Nvir.dotenv_loader()
                |> Nvir.dotenv_configure(cd: dir)
-               # passing the relative filename
                |> Nvir.dotenv!(filename)
 
       # ...they are now defined
@@ -1026,7 +1025,6 @@ defmodule NvirTest do
       assert %{"USING_CWD" => "nope", "USING_ABS" => "yes"} =
                Nvir.dotenv_loader()
                |> Nvir.dotenv_configure(cd: dir)
-               # passing the relative filename
                |> Nvir.dotenv!([rel_filename, abs_filename])
 
       # ...they are now defined

@@ -95,7 +95,7 @@ Elixir function.
 
 It _is_ possible to return a different name from there. The original variable name will _not_ be defined. We use this in the example below but it's generally not recommended for clarity's sake.
 
-An example using values that are not strings and swaps the variable name.
+Example:
 
 ```elixir
 # runtime.exs
@@ -110,15 +110,14 @@ end
 dotenv_new()
 |> dotenv_configure(
   before_env_set: fn
-    {"USERNAME", username} ->
-      {:HOMEPAGE, to_homepage.(username)}
-    other ->
-      other
+    {"USERNAME", username} -> {:HOMEPAGE, to_homepage.(username)}
+    other -> other
   end
 )
 |> dotenv!(".env")
 ```
 
-In the example above, the defined variable will be `"HOMEPAGE"` and not the
-equivalent atom. The value will be `"http://example.com/some-username"` as a
-string too.
+* The transformation returns a different variable name.
+* The `USERNAME` variable will not be set by Nvir.
+* The `HOMEPAGE` variable is returned with an atom key and a `URI` struct value.
+* Nvir will set both key and values as strings in the System environment.

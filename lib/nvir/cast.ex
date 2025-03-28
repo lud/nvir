@@ -30,14 +30,22 @@ defmodule Nvir.Cast do
           | {:error, :bad_cast}
   @spec cast(term, caster) :: result
 
+  @external_resource "guides/var-reading/the-env-functions.md"
+
   @doc """
-  Casts an environment variable to the desired type.
+  Casts the given value to the desired type.
 
   Environment variables are always defined as a string. Thus, the `cast/2`
-  function will only work with strings as it's first argument.
+  function will only accept strings for the `value` argument.
 
-  Please refer to the "Available Casters" of the [README](README.md#available-casters) for a
-  detailed explanation of all casters.
+  Accepts a built-in caster or a custom function returning `{:ok, value}` or
+  `{:error, String.t()}`. You may as well directly return an error tuple from a
+  recursive `cast/2` call.
+
+  ## Built-in casters
+
+  #{Readmix.Docs.extract_section("guides/var-reading/the-env-functions.md",
+  "available_casters")}
   """
   @spec cast(String.t(), caster) :: result
   def cast(value, caster)
