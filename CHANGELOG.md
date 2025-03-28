@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.1] - 2025-03-28
+
+### 📚 Documentation
+
+- Fixed documentation errors
+
 ## [0.13.0] - 2025-03-28
 
 ### 🚀 Features
