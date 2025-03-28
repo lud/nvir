@@ -32,7 +32,7 @@ separated by at least one space, otherwise the comment will be included in the
 value.
 
 ```elixir
-# This is a comment on it's own line
+# This is a comment on its own line
 
 KEY=value # Inline comment
 

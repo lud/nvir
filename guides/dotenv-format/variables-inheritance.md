@@ -24,7 +24,7 @@ falls back to the variables defined in the dotenv files.
 
 
 In this example with a regular file, the `WHO=moon` variable will not be set in
-the environment as is it already defined in the system environment as
+the environment as it is already defined in the system environment as
 `WHO=world`.
 
 Nvir will respect that logic when building interpolated values:
@@ -55,7 +55,7 @@ of variables added to the runtime environment.
 
 ## Multiple files
 
-With multiple files, we use the latest value. In this exemple the variable is
+With multiple files, we use the latest value. In this example the variable is
 not already defined in the system:
 
 ```elixir

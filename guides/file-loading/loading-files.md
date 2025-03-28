@@ -36,7 +36,7 @@ The `Nvir.dotenv!/1` function accepts different types of sources to define which
 dotenv files to load.
 
 The sources can be different types of values like lists, nested tuples, _etc._,
-but all of them must finally contain a file path..
+but all of them must finally contain a file path.
 
 Nvir accepts relative paths or absolute paths. Relative paths are relative to
 `File.cwd!()`, which is the directory containing `mix.exs`.
@@ -81,7 +81,7 @@ It is also valid to pass the same key multiple times:
 ```elixir
 dotenv!(
   dev: ".env",
-  test: ".env.test"
+  test: ".env.test",
   test: ".env.test.local"
 )
 ```
@@ -223,9 +223,9 @@ enabled or disabled tags).
 ```elixir
 dotenv!(
   dev: "1",
-  test: ["2", ci: "3", overwrite: "100"]
-  overwrite: ["101", test: "102"]
-  linux: "4",
+  test: ["2", ci: "3", overwrite: "100"],
+  overwrite: ["101", test: "102"],
+  linux: "4"
 )
 ```
 

@@ -156,8 +156,8 @@ raise for empty strings.
 
 ## Custom Casters
 
-The second argument to `env!/2` and `env/3` also accept custom validators using
-an anonymous function. The given function must return `{:ok, value}` or
+The second argument to `env!/2` and `env!/3` also accepts custom validators
+using an anonymous function. The given function must return `{:ok, value}` or
 `{:error, message}` where `message` is a string.
 
 ```elixir

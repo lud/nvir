@@ -7,7 +7,7 @@ defmodule Nvir do
   The most useful documentation is generally:
 
   * The [README](README.md#basic-usage) for usage instructions.
-  * The the `dotenv!/1` function.
+  * The `dotenv!/1` function.
   """
 
   @enforce_keys [:enabled_sources]
@@ -62,7 +62,7 @@ defmodule Nvir do
   end
 
   @doc """
-  Returns the sources enabed by default when using `dotenv/1` or
+  Returns the sources enabled by default when using `dotenv/1` or
   `dotenv_loader/0`. The value changes dynamically depending on the current
   environment and operating system.
 
