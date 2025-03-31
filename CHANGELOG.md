@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2] - 2025-03-31
+
+### 🐛 Bug Fixes
+
+- Removed usage of readmix in prod environment
+
 ## [0.13.1] - 2025-03-28
 
 ### 📚 Documentation
