@@ -42,10 +42,8 @@ defmodule Nvir.Cast do
   `{:error, String.t()}`. You may as well directly return an error tuple from a
   recursive `cast/2` call.
 
-  ## Built-in casters
-
-  #{Readmix.Docs.extract_section("guides/var-reading/the-env-functions.md",
-  "available_casters")}
+  The list of built-in casters is described in the [reading environment
+  variables](guides/var-reading/the-env-functions.md#built-in-casters) guide.
   """
   @spec cast(String.t(), caster) :: result
   def cast(value, caster)
