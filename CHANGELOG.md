@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.3] - 2025-07-03
+
+### ⚙️ Miscellaneous Tasks
+
+- Update Elixir Github workflow (#21)
+- CI cache setup (#24)
+- Added deps submission
+- *(libcheck)* Update dependabot config (#25)
+- *(libcheck)* Update dependabot config (#26)
+- *(libcheck)* Update Elixir Github workflow (#29)
+- *(libcheck)* Update Elixir Github workflow (#32)
+
 ## [0.13.2] - 2025-03-31
 
 ### 🐛 Bug Fixes
