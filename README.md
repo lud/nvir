@@ -25,11 +25,11 @@ experience.
 
 As usual, pull the library from your `mix.exs` file.
 
-<!-- rdmx :app_dep runtime:false vsn:$app_vsn -->
+<!-- rdmx :app_dep vsn:$app_vsn -->
 ```elixir
 def deps do
   [
-    {:nvir, "~> 0.13", runtime: false},
+    {:nvir, "~> 0.13"},
   ]
 end
 ```
@@ -48,7 +48,7 @@ You will generally use Nvir from your `config/runtime.exs` file.
 
 ```elixir
 # runtime.exs
-
+import Config
 import Nvir
 
 dotenv!([".env", ".env.#{config_env()}"])
