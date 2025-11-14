@@ -121,6 +121,10 @@ Nvir philosophy is that the dotenv files are patches for the environment
 _around_ the application, and so the application should be able to use those
 variables from anywhere with `System.fetch_env/1` or `Nvir.env!/2`.
 
-Nvir will _always_ patch the system environment. The development environment and
-production environment will use the same code paths. This also works well with
-libraries that expect some environment variables to be defined.
+Nvir will patch the system environment locally in development and test
+environments. From there, your config will be executed just the same in
+production and locally, which makes configuration simpler to reason about and
+easier to debug.
+
+This also works well with libraries that expect some environment variables to be
+defined instead of using the config system.
