@@ -541,6 +541,9 @@ defmodule Nvir do
 
   Returns the `default` value if the variable is not defined.
 
+  If `default` is a function, it is called only if the variable is not defined.
+  The returned value from `env!/3` will be the return value of the function.
+
   Raises if the caster validation fails.
 
   Please see the [README](README.md#available-casters) for available casters.
@@ -563,8 +566,15 @@ defmodule Nvir do
   @doc false
   def env(var, caster, default) do
     case System.fetch_env(var) do
-      {:ok, value} -> cast(var, value, caster)
-      :error -> {:ok, default}
+      {:ok, value} ->
+        cast(var, value, caster)
+
+      :error ->
+        if is_function(default, 0) do
+          {:ok, default.()}
+        else
+          {:ok, default}
+        end
     end
   end
 

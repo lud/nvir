@@ -905,6 +905,21 @@ defmodule NvirTest do
       # bad caster will not be checked if we use the default
       assert 9999 = Nvir.env!("NON_EXISTING", :bad_caster, 9999)
     end
+
+    test "lazy default" do
+      delete_key("LAZY_DEFAULT")
+
+      # Default is a function
+      assert "lazy" = Nvir.env!("LAZY_DEFAULT", :string, fn -> "lazy" end)
+
+      # Function is not called if env var exists
+      put_key("LAZY_DEFAULT", "exists")
+
+      assert "exists" =
+               Nvir.env!("LAZY_DEFAULT", :string, fn ->
+                 raise "Should not be called"
+               end)
+    end
   end
 
   describe "custom parser" do
@@ -1031,4 +1046,6 @@ defmodule NvirTest do
       assert "nope" = System.fetch_env!("USING_CWD")
     end
   end
+
+
 end

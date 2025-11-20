@@ -64,6 +64,15 @@ Default values are not validated by the caster:
 env!("TIMEOUT", :integer!, :infinity)
 ```
 
+If the default value is a function, it is called only if the variable is not defined. This is useful when the default value is expensive to compute.
+
+```elixir
+env!("SECRET_KEY_BASE", :string!, fn ->
+  # This will only be called if SECRET_KEY_BASE is not set
+  generate_secret_key_base()
+end)
+```
+
 
 ## Built-in Casters
 
@@ -99,38 +108,38 @@ With `PORT=""` in the environment:
 
 ### String Casters
 
-| Caster | Description |
-|--------|-------------|
-| `:string` | Returns the value as-is. |
+| Caster     | Description                      |
+| ---------- | -------------------------------- |
+| `:string`  | Returns the value as-is.         |
 | `:string?` | Converts empty strings to `nil`. |
-| `:string!` | Raises for empty strings. |
+| `:string!` | Raises for empty strings.        |
 
 ### Boolean Casters
 
-| Caster | Description |
-|--------|-------------|
-| `:boolean` | `"false"`, `"0"` and empty strings become `false`, any other value is `true`. Case insensitive. It is recommended to use `:boolean!` instead. |
-| `:boolean!` | Accepts only `"true"`, `"false"`, `"1"`, and `"0"`. Case insensitive. |
+| Caster      | Description                                                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `:boolean`  | `"false"`, `"0"` and empty strings become `false`, any other value is `true`. Case insensitive. It is recommended to use `:boolean!` instead. |
+| `:boolean!` | Accepts only `"true"`, `"false"`, `"1"`, and `"0"`. Case insensitive.                                                                         |
 
 ### Number Casters
 
-| Caster | Description |
-|--------|-------------|
-| `:integer!` | Strict integer parsing. |
+| Caster      | Description                                       |
+| ----------- | ------------------------------------------------- |
+| `:integer!` | Strict integer parsing.                           |
 | `:integer?` | Like `:integer!` but empty strings becomes `nil`. |
-| `:float!` | Strict float parsing. |
-| `:float?` | Like `:float!` but empty strings becomes `nil`. |
+| `:float!`   | Strict float parsing.                             |
+| `:float?`   | Like `:float!` but empty strings becomes `nil`.   |
 
 ### Atom Casters
 
-| Caster | Description |
-|--------|-------------|
-| `:atom` | Converts the value to an atom. Use the `:existing_atom` variants when possible. |
-| `:atom?` | Like `:atom` but empty strings becomes `nil`. |
-| `:atom!` | Like `:atom` but rejects empty strings. |
-| `:existing_atom` | Converts to existing atom only, raises otherwise. |
-| `:existing_atom?` | Like `:existing_atom` but empty strings becomes `nil`. |
-| `:existing_atom!` | Like `:existing_atom` but rejects empty strings. |
+| Caster            | Description                                                                     |
+| ----------------- | ------------------------------------------------------------------------------- |
+| `:atom`           | Converts the value to an atom. Use the `:existing_atom` variants when possible. |
+| `:atom?`          | Like `:atom` but empty strings becomes `nil`.                                   |
+| `:atom!`          | Like `:atom` but rejects empty strings.                                         |
+| `:existing_atom`  | Converts to existing atom only, raises otherwise.                               |
+| `:existing_atom?` | Like `:existing_atom` but empty strings becomes `nil`.                          |
+| `:existing_atom!` | Like `:existing_atom` but rejects empty strings.                                |
 
 Note that using `:existing_atom` with empty strings will not raise an exception
 because the `:""` atom is valid and is generally defined by the system on boot.
@@ -146,11 +155,11 @@ This behaviour does not exist in Elixir so casters for such types behave the
 same with-or-without the `!` suffix. This means `:integer` and `:float` will
 raise for empty strings.
 
-| Caster | Description |
-|--------|-------------|
+| Caster      | Description                                                               |
+| ----------- | ------------------------------------------------------------------------- |
 | `:boolean?` | Same as `:boolean`. ⚠️ Returns `false` instead of `nil` for empty strings. |
-| `:integer` | Same as `:integer!`. |
-| `:float` | Same as `:float!`. |
+| `:integer`  | Same as `:integer!`.                                                      |
+| `:float`    | Same as `:float!`.                                                        |
 
 <!-- rdmx /:section -->
 
