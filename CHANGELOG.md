@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0] - 2025-11-20
+
+### 🚀 Features
+
+- [**breaking**] Function given as default values to env! now act as lazy defaults
+
+### 📚 Documentation
+
+- Clarify Nvir philosophy about production environment
+
 ## [0.13.4] - 2025-10-11
 
 ### ⚙️ Miscellaneous Tasks
