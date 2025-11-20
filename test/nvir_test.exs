@@ -1046,6 +1046,4 @@ defmodule NvirTest do
       assert "nope" = System.fetch_env!("USING_CWD")
     end
   end
-
-
 end
