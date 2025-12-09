@@ -16,8 +16,8 @@ import Config
 import Nvir
 
 dotenv_loader()
-|> enable_sources(:docs, config_env() == :docs)
-|> enable_sources(:release, env!("RELEASE_NAME", :boolean, false))
+|> dotenv_enable_sources(:docs, config_env() == :docs)
+|> dotenv_enable_sources(:release, env!("RELEASE_NAME", :boolean, false))
 |> dotenv_configure(cd: "/app/release/env")
 |> dotenv!(
   dev: ".env",
@@ -48,7 +48,7 @@ import Config
 import Nvir
 
 dotenv_loader()
-|> enable_sources(:test, config_env() == :test and MyApp.some_custom_check())
+|> dotenv_enable_sources(:test, config_env() == :test and MyApp.some_custom_check())
 |> dotenv!(
   dev: ".env",
   test: ".env.test"
