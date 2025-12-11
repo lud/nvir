@@ -54,14 +54,16 @@ defmodule Nvir.Parser.DefaultParser do
     attach_error_content(error, content)
   end
 
-  if Application.compile_env!(:nvir, :display_file_contents_in_errors) == true do
-    defp attach_error_content(error, content) do
-      Nvir.Parser.ParseError.with_debug_content(error, content)
-    end
-  else
-    defp attach_error_content(error, _content) do
-      error
-    end
+  case Application.compile_env(:nvir, :diszplay_file_contents_in_errors) do
+    true ->
+      defp attach_error_content(error, content) do
+        Nvir.Parser.ParseError.with_debug_content(error, content)
+      end
+
+    _ ->
+      defp attach_error_content(error, _content) do
+        error
+      end
   end
 
   # ---------------------------------------------------------------------------
