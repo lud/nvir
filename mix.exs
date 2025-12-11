@@ -2,7 +2,7 @@ defmodule Nvir.MixProject do
   use Mix.Project
 
   @source_url "https://github.com/lud/nvir"
-  @version "0.14.0"
+  @version "0.15.0"
 
   def project do
     [

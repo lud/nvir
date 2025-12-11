@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0] - 2025-12-11
+
+### 🚀 Features
+
+- New dotenv file parser implementation with 10x speed and error reporting
+
+### 📚 Documentation
+
+- Fix deprecated functions in documentation
+
+### ⚙️ Miscellaneous Tasks
+
+- Fix bad formatting
+
 ## [0.14.0] - 2025-11-20
 
 ### 🚀 Features
