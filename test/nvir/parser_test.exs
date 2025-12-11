@@ -1,25 +1,32 @@
 defmodule Nvir.ParserTest do
   alias Nvir.Parser
   alias Nvir.Parser.ParseError
-  use ExUnit.Case, async: false
+
+  use ExUnit.Case,
+    async: false,
+    parameterize: [
+      %{parser: Nvir.Parser.DefaultParser}
+    ]
 
   doctest Nvir.Parser
-  doctest Nvir.Parser.RDB
 
-  defp parse(string) do
-    Nvir.Parser.RDB.parse_string(string)
+  defp parse(parser, string) do
+    parser.parse_string(string)
   end
 
-  defp parse_map!(string) do
-    {:ok, values} = parse(string)
+  defp parse_map!(parser, string) do
+    {:ok, values} = parse(parser, string)
     Map.new(values)
   end
 
-  # We use parse_map! in this test to make it easy, but the parser returns the
-  # vars in order
-  test "the parser actually returns an ordered list of entries" do
+  defp parse_map_with!(string, parser) do
+    parse_map!(parser, string)
+  end
+
+  # The items are returned in order of definition
+  test "the parser actually returns an ordered list of entries", %{parser: parser} do
     assert {:ok, entries} =
-             parse("""
+             parse(parser, """
              K1=v1.1
              K1=v1.2
              K2=v2.1
@@ -30,17 +37,17 @@ defmodule Nvir.ParserTest do
     assert [{"K1", "v1.1"}, {"K1", "v1.2"}, {"K2", "v2.1"}, {"K2", "v2.2"}] == entries
   end
 
-  test "empty lines" do
-    assert %{} == parse_map!("")
+  test "empty lines", %{parser: parser} do
+    assert %{} == parse_map!(parser, "")
 
     assert %{} ==
-             parse_map!("""
-
+             parse_map!(parser, """
+             #{"    "}
 
              """)
   end
 
-  test "doc test" do
+  test "doc test", %{parser: parser} do
     env = """
     WHO=World
     GREETING=Hello $WHO!
@@ -53,10 +60,10 @@ defmodule Nvir.ParserTest do
          {"GREETING", ["Hello ", {:var, "WHO"}, "!"]}
        ]}
 
-    assert expected == parse(env)
+    assert expected == parse(parser, env)
   end
 
-  test "doc test self interpolate" do
+  test "doc test self interpolate", %{parser: parser} do
     env = """
     PATH=b
     PATH=$PATH:c
@@ -71,20 +78,20 @@ defmodule Nvir.ParserTest do
          {"PATH", ["a:", {:var, "PATH"}]}
        ]}
 
-    assert expected == parse(env)
+    assert expected == parse(parser, env)
   end
 
-  test "can parse a simple line" do
-    assert %{"SOME_KEY" => "some value"} = parse_map!("SOME_KEY=some value")
+  test "can parse a simple line", %{parser: parser} do
+    assert %{"SOME_KEY" => "some value"} = parse_map!(parser, "SOME_KEY=some value")
   end
 
-  test "supports utf8" do
-    assert %{"HÉHÉ" => "héhé"} = parse_map!("HÉHÉ=héhé")
+  test "supports utf8", %{parser: parser} do
+    assert %{"HÉHÉ" => "héhé"} = parse_map!(parser, "HÉHÉ=héhé")
   end
 
-  test "supports newlines" do
+  test "supports newlines", %{parser: parser} do
     assert %{"SOME_KEY" => "some value"} =
-             parse_map!("""
+             parse_map!(parser, """
 
 
              SOME_KEY=some value
@@ -93,17 +100,17 @@ defmodule Nvir.ParserTest do
              """)
   end
 
-  test "supports multiple entries" do
+  test "supports multiple entries", %{parser: parser} do
     assert %{"K1" => "v1", "K2" => "v2"} =
-             parse_map!("""
+             parse_map!(parser, """
              K1=v1
              K2=v2
              """)
   end
 
-  test "supports multiple entries with newlines" do
+  test "supports multiple entries with newlines", %{parser: parser} do
     assert %{"K1" => "v1", "K2" => "v2"} =
-             parse_map!("""
+             parse_map!(parser, """
 
              K1=v1
 
@@ -113,9 +120,9 @@ defmodule Nvir.ParserTest do
              """)
   end
 
-  test "supports comment lines" do
+  test "supports comment lines", %{parser: parser} do
     assert %{"K1" => "v1", "K2" => "v2"} =
-             parse_map!("""
+             parse_map!(parser, """
              # This is a comment
              K1=v1
 
@@ -128,9 +135,24 @@ defmodule Nvir.ParserTest do
              """)
   end
 
-  test "supports inline comment" do
+  test "supports comment lines without final newline", %{parser: parser} do
+    assert %{"K1" => "v1", "K2" => "v2"} =
+             parse_map!(parser, """
+             # This is a comment
+             K1=v1
+
+             # This is a
+             # multiline comment
+
+             K2=v2
+
+             # A final word? \
+             """)
+  end
+
+  test "supports inline comment", %{parser: parser} do
     assert %{"K1" => "v1", "K2" => "v2", "K3" => "v3", "INCLUDED" => "badline# no space"} =
-             parse_map!("""
+             parse_map!(parser, """
 
              K1=v1 # after the line
 
@@ -142,29 +164,29 @@ defmodule Nvir.ParserTest do
              """)
   end
 
-  test "supports comment lines at the end" do
+  test "supports comment lines at the end", %{parser: parser} do
     assert %{"GITHUB_API_TOKEN" => "some-token"} =
-             parse_map!("""
+             parse_map!(parser, """
              GITHUB_API_TOKEN=some-token
              # BROWSER=
              """)
 
     assert %{"GITHUB_API_TOKEN" => "some-token"} =
-             parse_map!("""
+             parse_map!(parser, """
              GITHUB_API_TOKEN=some-token
              # BROWSER=\
              """)
 
     assert %{"GITHUB_API_TOKEN" => "some-token"} =
-             parse_map!("""
+             parse_map!(parser, """
              GITHUB_API_TOKEN=some-token
              # BROWSER=    \
              """)
   end
 
-  test "supports spaces around keys" do
+  test "supports spaces around keys", %{parser: parser} do
     assert %{"SOME_KEY" => "some value", "BEFORE" => "some value", "AFTER" => "some value"} =
-             parse_map!("""
+             parse_map!(parser, """
              SOME_KEY = some value
              BEFORE =some value
              AFTER= some value
@@ -172,60 +194,89 @@ defmodule Nvir.ParserTest do
   end
 
   describe "double quoted strings" do
-    test "empty" do
-      assert %{"SOME_KEY" => ""} = parse_map!(~S(SOME_KEY=""))
+    test "empty", %{parser: parser} do
+      assert %{"SOME_KEY" => ""} = parse_map!(parser, ~S(SOME_KEY=""))
     end
 
-    test "octo" do
-      assert %{"SOME_KEY" => "# not a comment"} = parse_map!(~S(SOME_KEY="# not a comment"))
-      assert %{"SOME_KEY" => "not a # comment"} = parse_map!(~S(SOME_KEY="not a # comment"))
+    test "octo", %{parser: parser} do
+      assert %{"SOME_KEY" => "# not a comment"} =
+               parse_map!(parser, ~S(SOME_KEY="# not a comment"))
+
+      assert %{"SOME_KEY" => "not a # comment"} =
+               parse_map!(parser, ~S(SOME_KEY="not a # comment"))
     end
 
-    test "simple" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~S(SOME_KEY="some value"))
+    test "simple", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, ~S(SOME_KEY="some value"))
     end
 
-    test "simple with comment" do
+    test "simple with comment", %{parser: parser} do
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!(~S(SOME_KEY="some value"# touching comment))
+               parse_map!(parser, ~S(SOME_KEY="some value"# touching comment))
 
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!(~S(SOME_KEY="some value" # spaced comment))
+               parse_map!(parser, ~S(SOME_KEY="some value" # spaced comment))
     end
 
-    test "simple on its line" do
+    test "simple on its line", %{parser: parser} do
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!("""
+               parse_map!(parser, """
                SOME_KEY="some value"
                """)
     end
 
-    test "escaped \"" do
+    test "escaped \"", %{parser: parser} do
       # quote at the end
-      assert %{"K" => "some \"word\""} = parse_map!(~S(K="some \"word\""))
+      assert %{"K" => "some \"word\""} = parse_map!(parser, ~S(K="some \"word\""))
 
       # text at the end
-      assert %{"K" => "some \"word\" hey"} = parse_map!(~S(K="some \"word\" hey"))
+      assert %{"K" => "some \"word\" hey"} = parse_map!(parser, ~S(K="some \"word\" hey"))
     end
 
-    test "escaped \r", do: assert(%{"K" => "\r"} = parse_map!(~S(K="\r")))
-    test "escaped \n", do: assert(%{"K" => "\n"} = parse_map!(~S(K="\n")))
-    test "escaped \f", do: assert(%{"K" => "\f"} = parse_map!(~S(K="\f")))
-    test "escaped \t", do: assert(%{"K" => "\t"} = parse_map!(~S(K="\t")))
-    test "escaped \b", do: assert(%{"K" => "\b"} = parse_map!(~S(K="\b")))
-    test "escaped '", do: assert(%{"K" => "'"} = parse_map!(~S(K="\'")))
-    test "not escaped '", do: assert(%{"K" => "'"} = parse_map!(~S(K="'")))
-    test "escaped \\", do: assert(%{"K" => "\\"} = parse_map!(~S(K="\\")))
-    test "unknown escape", do: assert(%{"K" => "a"} = parse_map!(~S(K="\a")))
+    test "escaped \r", %{parser: parser} do
+      assert(%{"K" => "\r"} = parse_map!(parser, ~S(K="\r")))
+    end
 
-    test "multi escapes" do
+    test "escaped \n", %{parser: parser} do
+      assert(%{"K" => "\n"} = parse_map!(parser, ~S(K="\n")))
+    end
+
+    test "escaped \f", %{parser: parser} do
+      assert(%{"K" => "\f"} = parse_map!(parser, ~S(K="\f")))
+    end
+
+    test "escaped \t", %{parser: parser} do
+      assert(%{"K" => "\t"} = parse_map!(parser, ~S(K="\t")))
+    end
+
+    test "escaped \b", %{parser: parser} do
+      assert(%{"K" => "\b"} = parse_map!(parser, ~S(K="\b")))
+    end
+
+    test "escaped '", %{parser: parser} do
+      assert(%{"K" => "'"} = parse_map!(parser, ~S(K="\'")))
+    end
+
+    test "not escaped '", %{parser: parser} do
+      assert(%{"K" => "'"} = parse_map!(parser, ~S(K="'")))
+    end
+
+    test "escaped \\", %{parser: parser} do
+      assert(%{"K" => "\\"} = parse_map!(parser, ~S(K="\\")))
+    end
+
+    test "unknown escape", %{parser: parser} do
+      assert(%{"K" => "a"} = parse_map!(parser, ~S(K="\a")))
+    end
+
+    test "multi escapes", %{parser: parser} do
       assert %{
                "SOME_KEY" => "first quoted",
                "SOME_KEY_WITH_ESCAPE" => ~s(say "hello" to the world),
                "SOME_KEY_WITH_ESCAPE_END" => ~s(say "hello"),
                "EMPTY" => ""
              } =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                SOME_KEY="first quoted"
                SOME_KEY_WITH_ESCAPE="say \"hello\" to the world"
                SOME_KEY_WITH_ESCAPE_END="say \"hello\""
@@ -233,18 +284,18 @@ defmodule Nvir.ParserTest do
                """)
     end
 
-    test "unfinished quote" do
-      assert {:error, _} = parse(~s(SOME_KEY="hello))
-      assert {:error, _} = parse(~s(SOME_KEY="hello" ""))
+    test "unfinished quote", %{parser: parser} do
+      assert {:error, _} = parse(parser, ~s(SOME_KEY="hello))
+      assert {:error, _} = parse(parser, ~s(SOME_KEY="hello" ""))
     end
   end
 
   describe "leading whitespace" do
-    test "offset on the key" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!("      SOME_KEY=some value")
+    test "offset on the key", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, "      SOME_KEY=some value")
 
       assert %{"A" => "1", "B" => "2"} =
-               parse_map!("""
+               parse_map!(parser, """
                        A=1
                B=2
                """)
@@ -252,49 +303,63 @@ defmodule Nvir.ParserTest do
   end
 
   describe "trailing whitespace" do
-    test "whitespace before newline is trimmed" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!("SOME_KEY=some value    \n")
+    test "whitespace before newline is trimmed", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, "SOME_KEY=some value    \n")
     end
 
-    test "whitespace is trimmed if there is a comment" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!("SOME_KEY=some value    # hello \n")
+    test "whitespace is trimmed if there is a comment", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} =
+               parse_map!(parser, "SOME_KEY=some value    # hello \n")
     end
 
-    test "whitespace only" do
-      assert %{"SOME_KEY" => ""} = parse_map!("SOME_KEY=    ")
+    test "whitespace only", %{parser: parser} do
+      assert %{"SOME_KEY" => ""} = parse_map!(parser, "SOME_KEY=    ")
     end
 
-    test "whitespace is not part of the value if there are quotes" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY="some value"       ))
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY="some value"       \n))
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY='some value'       ))
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~s(SOME_KEY='some value'       \n))
+    test "whitespace is not part of the value if there are quotes", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, ~s(SOME_KEY="some value"       ))
+
+      assert %{"SOME_KEY" => "some value"} =
+               parse_map!(parser, ~s(SOME_KEY="some value"       \n))
+
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, ~s(SOME_KEY='some value'       ))
+
+      assert %{"SOME_KEY" => "some value"} =
+               parse_map!(parser, ~s(SOME_KEY='some value'       \n))
     end
 
-    test "multiline whitespace is not trimmed" do
+    test "multiline whitespace is not trimmed", %{parser: parser} do
       assert %{"SOME_KEY" => "first    \nsecond    \n"} =
-               parse_map!(~s(SOME_KEY="""\nfirst    \nsecond    \n"""))
+               parse_map!(parser, ~s(SOME_KEY="""\nfirst    \nsecond    \n"""))
 
       assert %{"SOME_KEY" => "first    \nsecond    \n"} =
-               parse_map!(~s(SOME_KEY='''\nfirst    \nsecond    \n'''))
+               parse_map!(parser, ~s(SOME_KEY='''\nfirst    \nsecond    \n'''))
     end
   end
 
   describe "empty values" do
-    test "raw", do: assert(%{"K" => ""} = parse_map!("K="))
-    test "quoted", do: assert(%{"K" => ""} = parse_map!(~s(K="")))
-    test "comment", do: assert(%{"K" => ""} = parse_map!(~s(K= #)))
+    test "raw", %{parser: parser} do
+      assert(%{"K" => ""} = parse_map!(parser, "K="))
+    end
 
-    test "comment touching" do
+    test "quoted", %{parser: parser} do
+      assert(%{"K" => ""} = parse_map!(parser, ~s(K="")))
+    end
+
+    test "comment", %{parser: parser} do
+      assert(%{"K" => ""} = parse_map!(parser, ~s(K= #)))
+    end
+
+    test "comment touching", %{parser: parser} do
       # just like raw values, if the octo touches the equal sign, it's the value
-      assert %{"K" => "#"} = parse_map!(~s(K=#))
-      assert %{"K" => "#hello"} = parse_map!("K=#hello")
+      assert %{"K" => "#"} = parse_map!(parser, ~s(K=#))
+      assert %{"K" => "#hello"} = parse_map!(parser, "K=#hello")
     end
   end
 
-  test "'export ' prefix" do
+  test "'export ' prefix", %{parser: parser} do
     assert %{"A" => "1", "B" => "2", "C" => "3", "D" => "4"} =
-             parse_map!("""
+             parse_map!(parser, """
              export A=1
                    export B = 2
              C=3
@@ -302,9 +367,37 @@ defmodule Nvir.ParserTest do
              """)
   end
 
-  test "duplicate value takes the last value" do
-    assert %{"AA" => "second AA", "BB" => "second BB"} =
-             parse_map!("""
+  test "export can be a variable", %{parser: parser} do
+    assert %{"export" => "true"} =
+             parse_map!(parser, """
+             export = true
+             """)
+  end
+
+  test "duplicate value takes the last value", %{parser: parser} do
+    # /!\ This test is stupid. The list-to-map conversion is done in the test.
+    # The parser returns a list of tuples
+    assert %{
+             "AA" => "second AA",
+             "BB" => "second BB"
+           } =
+             parse_map!(parser, """
+             AA = first AA
+             BB = first BB
+             BB = second BB
+             AA = second AA
+             """)
+
+    # The parser will return everything. I guess I wanted to test the fact that
+    # Nvir.dotenv!() will use Map.new() too with that. I can't remember.
+    assert {:ok,
+            [
+              {"AA", "first AA"},
+              {"BB", "first BB"},
+              {"BB", "second BB"},
+              {"AA", "second AA"}
+            ]} =
+             parse(parser, """
              AA = first AA
              BB = first BB
              BB = second BB
@@ -313,61 +406,81 @@ defmodule Nvir.ParserTest do
   end
 
   describe "single quoted strings" do
-    test "empty" do
-      assert %{"SOME_KEY" => ""} = parse_map!(~S(SOME_KEY=''))
+    test "empty", %{parser: parser} do
+      assert %{"SOME_KEY" => ""} = parse_map!(parser, ~S(SOME_KEY=''))
     end
 
-    test "octo" do
-      assert %{"SOME_KEY" => "# not a comment"} = parse_map!(~S(SOME_KEY='# not a comment'))
-      assert %{"SOME_KEY" => "not a # comment"} = parse_map!(~S(SOME_KEY='not a # comment'))
+    test "octo", %{parser: parser} do
+      assert %{"SOME_KEY" => "# not a comment"} =
+               parse_map!(parser, ~S(SOME_KEY='# not a comment'))
+
+      assert %{"SOME_KEY" => "not a # comment"} =
+               parse_map!(parser, ~S(SOME_KEY='not a # comment'))
     end
 
-    test "simple" do
-      assert %{"SOME_KEY" => "some value"} = parse_map!(~S(SOME_KEY='some value'))
+    test "simple", %{parser: parser} do
+      assert %{"SOME_KEY" => "some value"} = parse_map!(parser, ~S(SOME_KEY='some value'))
     end
 
-    test "simple with comment" do
+    test "simple with comment", %{parser: parser} do
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!(~S(SOME_KEY='some value'# touching comment))
+               parse_map!(parser, ~S(SOME_KEY='some value'# touching comment))
 
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!(~S(SOME_KEY='some value' # spaced comment))
+               parse_map!(parser, ~S(SOME_KEY='some value' # spaced comment))
     end
 
-    test "simple on its line" do
+    test "simple on its line", %{parser: parser} do
       assert %{"SOME_KEY" => "some value"} =
-               parse_map!("""
+               parse_map!(parser, """
                SOME_KEY='some value'
                """)
     end
 
-    test "escaped '" do
+    test "escaped '", %{parser: parser} do
       # quote at the end
-      assert %{"K" => "some 'word'"} = parse_map!(~S(K='some \'word\''))
+      assert %{"K" => "some 'word'"} = parse_map!(parser, ~S(K='some \'word\''))
 
       # text at the end
-      assert %{"K" => "some 'word' hey"} = parse_map!(~S(K='some \'word\' hey'))
+      assert %{"K" => "some 'word' hey"} = parse_map!(parser, ~S(K='some \'word\' hey'))
     end
 
-    test "not escaped \r", do: assert(%{"K" => "\\r"} = parse_map!(~S(K='\r')))
-    test "not escaped \n", do: assert(%{"K" => "\\n"} = parse_map!(~S(K='\n')))
-    test "not escaped \f", do: assert(%{"K" => "\\f"} = parse_map!(~S(K='\f')))
-    test "not escaped \t", do: assert(%{"K" => "\\t"} = parse_map!(~S(K='\t')))
+    test "not escaped \r", %{parser: parser} do
+      assert(%{"K" => "\\r"} = parse_map!(parser, ~S(K='\r')))
+    end
 
-    test "not escaped \b", do: assert(%{"K" => "\\b"} = parse_map!(~S(K='\b')))
+    test "not escaped \n", %{parser: parser} do
+      assert(%{"K" => "\\n"} = parse_map!(parser, ~S(K='\n')))
+    end
 
-    test "not escaped \\", do: assert(%{"K" => "\\ aaa"} = parse_map!(~S(K='\ aaa')))
+    test "not escaped \f", %{parser: parser} do
+      assert(%{"K" => "\\f"} = parse_map!(parser, ~S(K='\f')))
+    end
 
-    test "unknown escape", do: assert(%{"K" => "\\a"} = parse_map!(~S(K='\a')))
+    test "not escaped \t", %{parser: parser} do
+      assert(%{"K" => "\\t"} = parse_map!(parser, ~S(K='\t')))
+    end
 
-    test "multi escapes" do
+    test "not escaped \b", %{parser: parser} do
+      assert(%{"K" => "\\b"} = parse_map!(parser, ~S(K='\b')))
+    end
+
+    test "not escaped \\", %{parser: parser} do
+      assert(%{"K" => "\\ aaa"} = parse_map!(parser, ~S(K='\ aaa')))
+    end
+
+    test "unknown escape", %{parser: parser} do
+      assert(%{"K" => "\\a"} = parse_map!(parser, ~S(K='\a')))
+    end
+
+    test "multi escapes", %{parser: parser} do
       assert %{
                "SOME_KEY" => "first quoted",
                "SOME_KEY_WITH_ESCAPE" => ~s(say "hello" to the world),
                "SOME_KEY_WITH_ESCAPE_END" => ~s(say "hello"),
                "EMPTY" => ""
              } =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                SOME_KEY='first quoted'
                SOME_KEY_WITH_ESCAPE='say "hello" to the world'
                SOME_KEY_WITH_ESCAPE_END='say "hello"'
@@ -375,16 +488,16 @@ defmodule Nvir.ParserTest do
                """)
     end
 
-    test "unfinished quote" do
-      assert {:error, _} = parse(~s(SOME_KEY='hello))
-      assert {:error, _} = parse(~s(SOME_KEY='hello' ''))
+    test "unfinished quote", %{parser: parser} do
+      assert {:error, _} = parse(parser, ~s(SOME_KEY='hello))
+      assert {:error, _} = parse(parser, ~s(SOME_KEY='hello' ''))
     end
   end
 
   describe ~S(multiline strings with """) do
-    test "correct" do
+    test "correct", %{parser: parser} do
       assert %{"MESSAGE" => "Dear World,\nHello!\n"} =
-               parse_map!(~S'''
+               parse_map!(parser, ~S'''
                MESSAGE="""
                Dear World,
                Hello!
@@ -392,9 +505,9 @@ defmodule Nvir.ParserTest do
                ''')
     end
 
-    test "multiple" do
+    test "multiple", %{parser: parser} do
       assert %{"MESSAGE1" => "Dear World,\nHello!\n", "MESSAGE2" => "\tDear World,\nGoodbye!\n"} =
-               parse_map!(~S'''
+               parse_map!(parser, ~S'''
                MESSAGE1="""
                Dear World,
                Hello!
@@ -406,9 +519,9 @@ defmodule Nvir.ParserTest do
                ''')
     end
 
-    test "contains quote" do
+    test "contains quote", %{parser: parser} do
       assert %{"A" => ~s(on " line\nat end "\n"\ndouble: ""\n)} =
-               parse_map!(~S'''
+               parse_map!(parser, ~S'''
                A="""
                on " line
                at end "
@@ -420,9 +533,9 @@ defmodule Nvir.ParserTest do
   end
 
   describe ~S(multiline strings with ''') do
-    test "correct" do
+    test "correct", %{parser: parser} do
       assert %{"MESSAGE" => "Dear World,\nHello!\n"} =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                MESSAGE='''
                Dear World,
                Hello!
@@ -430,9 +543,9 @@ defmodule Nvir.ParserTest do
                """)
     end
 
-    test "multiple" do
+    test "multiple", %{parser: parser} do
       assert %{"MESSAGE1" => "Dear World,\nHello!\n", "MESSAGE2" => "\\tDear World,\nGoodbye!\n"} =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                MESSAGE1='''
                Dear World,
                Hello!
@@ -444,9 +557,9 @@ defmodule Nvir.ParserTest do
                """)
     end
 
-    test "contains quote" do
+    test "contains quote", %{parser: parser} do
       assert %{"A" => ~s(on ' line\nat end '\n'\ndouble: ''\n)} =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                A='''
                on ' line
                at end '
@@ -458,7 +571,7 @@ defmodule Nvir.ParserTest do
       # The \' escape is allowed, though not useful
 
       assert %{"A" => ~s(on ' line\nat end '\n'\ndouble: ''\n)} =
-               parse_map!(~S"""
+               parse_map!(parser, ~S"""
                A='''
                on \' line
                at end \'
@@ -470,9 +583,46 @@ defmodule Nvir.ParserTest do
   end
 
   describe "interpolation parsing" do
-    test "in raw value" do
+    test "no interpolation if alone", %{parser: parser} do
+      assert %{
+               "WITH_LEADING" => "$",
+               "WITH_TRAILING" => "$",
+               "WITH_WORD" => "$ aaa"
+             } =
+               parse_map!(parser, """
+               WITH_LEADING= $
+               WITH_WORD= $ aaa
+               WITH_TRAILING= $  #{"    "}
+               """)
+    end
+
+    test "in raw value", %{parser: parser} do
+      assert %{"ENCLOSED" => enclosed} =
+               parse_map!(parser, """
+               ENCLOSED=hello ${WHO}
+
+               """)
+
+      assert ["hello ", {:var, "WHO"}] == enclosed
+
+      assert "hello world" = Parser.interpolate_var(enclosed, fn "WHO" -> "world" end)
+    end
+
+    test "in raw value, enclosed", %{parser: parser} do
+      assert %{"NODELIM" => nodelim} =
+               parse_map!(parser, """
+
+               NODELIM=hello $WHO
+               """)
+
+      assert ["hello ", {:var, "WHO"}] == nodelim
+
+      assert "hello world" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
+    end
+
+    test "both types can be mixed", %{parser: parser} do
       assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
-               parse_map!("""
+               parse_map!(parser, """
                ENCLOSED=hello ${WHO}
                NODELIM=hello $WHO
                """)
@@ -484,9 +634,9 @@ defmodule Nvir.ParserTest do
       assert "hello world" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
-    test "when resolver returns nil" do
+    test "when resolver returns nil", %{parser: parser} do
       assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
-               parse_map!("""
+               parse_map!(parser, """
                ENCLOSED=hello ${WHO}
                NODELIM=hello $WHO
                """)
@@ -498,9 +648,9 @@ defmodule Nvir.ParserTest do
       assert "hello " = Parser.interpolate_var(nodelim, fn "WHO" -> nil end)
     end
 
-    test "in double quoted value" do
+    test "in double quoted value", %{parser: parser} do
       assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
-               parse_map!("""
+               parse_map!(parser, """
                ENCLOSED="hello ${WHO}"
                NODELIM="hello $WHO"
                """)
@@ -512,9 +662,9 @@ defmodule Nvir.ParserTest do
       assert "hello world" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
-    test "in double quoted multiline" do
+    test "in double quoted multiline", %{parser: parser} do
       assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
-               parse_map!(~S'''
+               parse_map!(parser, ~S'''
                ENCLOSED="""
                hello ${WHO}
                """
@@ -530,9 +680,9 @@ defmodule Nvir.ParserTest do
       assert "hello world\n" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
-    test "double quoted multiline whole line" do
+    test "double quoted multiline whole line", %{parser: parser} do
       assert %{"ENCLOSED" => enclosed, "NODELIM" => nodelim} =
-               parse_map!(~S'''
+               parse_map!(parser, ~S'''
                ENCLOSED="""
                ${WHO}
                """
@@ -548,17 +698,17 @@ defmodule Nvir.ParserTest do
       assert "world\n" = Parser.interpolate_var(nodelim, fn "WHO" -> "world" end)
     end
 
-    test "in single quoted, no interpolation" do
+    test "in single quoted, no interpolation", %{parser: parser} do
       assert %{"ENCLOSED" => "hello ${WHO}", "NODELIM" => "hello $WHO"} =
-               parse_map!("""
+               parse_map!(parser, """
                ENCLOSED='hello ${WHO}'
                NODELIM='hello $WHO'
                """)
     end
 
-    test "in single quoted multiline, no interpolation" do
+    test "in single quoted multiline, no interpolation", %{parser: parser} do
       assert %{"ENCLOSED" => "hello ${WHO}\n", "NODELIM" => "hello $WHO\n"} =
-               parse_map!("""
+               parse_map!(parser, """
                ENCLOSED='''
                hello ${WHO}
                '''
@@ -572,110 +722,333 @@ defmodule Nvir.ParserTest do
       Parser.interpolate_var(Map.fetch!(map, "SENTENCE"), fn key -> Map.get(vars, key, "") end)
     end
 
-    test "edge case - vars on both ends" do
-      # test for removing empty chunks
+    test "edge case - vars on both ends", %{parser: parser} do
       assert "hello world" =
                "SENTENCE=$GREETING $WHO"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "hello world" =
                ~s(SENTENCE="$GREETING $WHO")
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
-    test "var touching comment, still included in the values just like raw files" do
+    test "var touching comment, still included in the values just like raw files", %{
+      parser: parser
+    } do
       assert "world#this is a comment" =
                "SENTENCE=$WHO#this is a comment"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"WHO" => "world"})
 
       # If the comment is spaces, it is not included in the value
       assert "world" =
                "SENTENCE=$WHO #this is a comment"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"WHO" => "world"})
 
       # Quotes protect comments from touching
       assert "world" =
                ~s(SENTENCE="$WHO"#this is a comment)
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"WHO" => "world"})
 
       # Enclosing does not
       assert "world#this is a comment" =
                "SENTENCE=${WHO}#this is a comment"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"WHO" => "world"})
     end
 
-    test "edge case - vars touching" do
+    test "edge case - vars touching", %{parser: parser} do
       assert "helloworld" =
                "SENTENCE=$GREETING$WHO"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "helloworld" =
                ~s(SENTENCE="$GREETING$WHO")
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
-    test "edge case - enclosed vars touching" do
+    test "edge case - enclosed vars touching", %{parser: parser} do
       assert "helloworld" =
                "SENTENCE=${GREETING}${WHO}"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
 
       assert "helloworld" =
                ~s(SENTENCE="${GREETING}${WHO}")
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
     end
 
-    test "edge case - vars and dollar" do
+    test "edge case - vars and dollar", %{parser: parser} do
       assert "$hello" =
                "SENTENCE=$$GREETING"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello"})
 
       assert "$hello" =
                ~s(SENTENCE="$$GREETING")
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"GREETING" => "hello"})
     end
 
-    test "edge case - empty enclosure" do
+    test "edge case - empty enclosure", %{parser: parser} do
       assert "no---space" =
                "SENTENCE=no${}space"
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"" => "---"})
 
       assert "no---space" =
                ~s(SENTENCE="no${}space")
-               |> parse_map!()
+               |> parse_map_with!(parser)
                |> build_sentence(%{"" => "---"})
+    end
+
+    test "numeric variable name", %{parser: parser} do
+      assert "hello $123" =
+               "SENTENCE=$GREETING $123"
+               |> parse_map_with!(parser)
+               |> build_sentence(%{"GREETING" => "hello"})
+    end
+
+    test "other char variable name", %{parser: parser} do
+      assert "hello $@test" =
+               "SENTENCE=$GREETING $@test"
+               |> parse_map_with!(parser)
+               |> build_sentence(%{"GREETING" => "hello"})
+    end
+
+    test "double dollar", %{parser: parser} do
+      assert "hello $world" =
+               "SENTENCE=$GREETING $$WHO"
+               |> parse_map_with!(parser)
+               |> build_sentence(%{"GREETING" => "hello", "WHO" => "world"})
+    end
+
+    test "lowercase is supported", %{parser: parser} do
+      assert "hello world" =
+               "SENTENCE=$greeting $who"
+               |> parse_map_with!(parser)
+               |> build_sentence(%{"greeting" => "hello", "who" => "world"})
     end
   end
 
-  defp valid_parse_error!(e) do
-    msg = Exception.message(e)
-    refute msg =~ "retrieving Exception.message/1"
-    e
-  end
+  describe "parsing error tests" do
+    defp valid_parse_error!(e) do
+      msg = Exception.message(e)
+      refute msg =~ "retrieving Exception.message/1"
+      # IO.puts("--------------- ERROR ---------------")
+      # IO.puts(msg)
+      # IO.puts("-------------------------------------")
+      msg
+    end
 
-  describe "parse errors" do
-    test "no value" do
-      assert {:error, parse_error} =
-               parse(~S'''
-               A=1
-               B="""
-               ''')
+    test "unexpected EOF in triple double quotes", %{parser: parser} do
+      env = ~S(KEY=""")
 
-      assert %ParseError{line: 3} = parse_error
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof after multiline string start"
+      assert %ParseError{line: 1, col: 8} = e
+    end
 
-      valid_parse_error!(parse_error)
+    test "unexpected character in triple double quotes", %{parser: parser} do
+      env = ~S'''
+      KEY=""".invalid
+      '''
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected character after multiline string start"
+      assert %ParseError{line: 1, col: 8} = e
+    end
+
+    test "unexpected EOF in triple single quotes", %{parser: parser} do
+      env = """
+      KEY='''
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof in multiline single quoted string"
+      assert %ParseError{line: 2, col: 1} = e
+    end
+
+    test "unexpected character in triple single quotes", %{parser: parser} do
+      env = """
+      KEY='''.invalid
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected character after multiline string start"
+      assert %ParseError{line: 1, col: 8} = e
+    end
+
+    test "forbidden newline in double quoted string", %{parser: parser} do
+      env = """
+      KEY="value
+      with newline"
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected newline"
+      assert %ParseError{line: 1, col: 11} = e
+    end
+
+    test "unfinished double quoted string", %{parser: parser} do
+      env = ~S(KEY="unclosed string)
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof"
+      assert %ParseError{line: 1, col: 21} = e
+    end
+
+    test "forbidden newline in single quoted string", %{parser: parser} do
+      env = """
+      KEY='value
+      with newline'
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected newline"
+      assert %ParseError{line: 1, col: 11} = e
+    end
+
+    test "unfinished single quoted string", %{parser: parser} do
+      env = """
+      KEY='unclosed string
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected newline in single quoted string"
+      assert %ParseError{line: 1, col: 21} = e
+    end
+
+    test "unfinished multi-line double quoted string", %{parser: parser} do
+      env = """
+      KEY=\"\"\"
+      unclosed multiline
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof in multiline double quoted string"
+      assert %ParseError{line: 3, col: 1} = e
+    end
+
+    test "unfinished multi-line single quoted string", %{parser: parser} do
+      env = """
+
+
+
+
+
+
+
+
+      KEY='''
+      unclosed multiline
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof in multiline single quoted string"
+      assert %ParseError{line: 11, col: 1} = e
+    end
+
+    test "forbidden newline in enclosed variable", %{parser: parser} do
+      env = """
+      KEY=${
+      var}
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected newline in variable braces"
+      assert %ParseError{line: 1, col: 7} = e
+    end
+
+    test "unclosed variable curly brace", %{parser: parser} do
+      env = """
+      KEY=${unclosed
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected newline in variable braces"
+      assert %ParseError{line: 1, col: 15} = e
+    end
+
+    test "left padded braces", %{parser: parser} do
+      env = """
+      KEY=${ UNSUPPORTED}
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected whitespace in variable braces"
+      assert %ParseError{line: 1, col: 7} = e
+    end
+
+    test "right padded braces", %{parser: parser} do
+      env = """
+      KEY=${UNSUPPORTED }
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected whitespace in variable braces"
+      assert %ParseError{line: 1, col: 18} = e
+    end
+
+    test "unclosed variable curly brace (EOF)", %{parser: parser} do
+      env = "KEY=${unclosed"
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected eof in variable braces"
+      assert %ParseError{line: 1, col: 15} = e
+    end
+
+    test "invalid char", %{parser: parser} do
+      env = "KEY=${foo@bar}"
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "invalid variable name"
+      assert %ParseError{line: 1, col: 10} = e
+    end
+
+    test "catchall clause in value parsing", %{parser: parser} do
+      env = """
+      KEY="hello" "world"
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected token"
+      assert %ParseError{line: 1, col: 13} = e
+    end
+
+    test "token after value", %{parser: parser} do
+      env = """
+      KEY=hello "world"
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected token"
+      assert %ParseError{line: 1, col: 11} = e
     end
   end
 end

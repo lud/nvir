@@ -4,8 +4,8 @@ defmodule Nvir.Parser do
   @moduledoc """
   A behaviour for environment variables sources parser.
 
-  The default implementation used in Nvir is `Nvir.Parser.RDB`. It can only
-  parse classic dotenv files.
+  The default implementation used in Nvir is `Nvir.Parser.DefaultParser`. It can
+  only parse classic dotenv files.
 
   Parsing other sources such as YAML files or encrypted files requires to
   provide your own parser.
@@ -17,7 +17,6 @@ defmodule Nvir.Parser do
   @type key :: String.t()
   @type template :: [binary | {:var, binary}]
   @type variable :: {key, binary | template}
-
   @type template_resolver :: (String.t() -> nil | String.t())
 
   @doc """
@@ -43,14 +42,14 @@ defmodule Nvir.Parser do
   require those values.
 
       iex> file_contents = "INTRO=hello\\nGREETING=$INTRO $WHO!"
-      iex> Nvir.Parser.RDB.parse_string(file_contents)
+      iex> Nvir.Parser.DefaultParser.parse_string(file_contents)
       {:ok, [{"INTRO", "hello"}, {"GREETING", [{:var, "INTRO"}, " ", {:var, "WHO"}, "!"]}]}
 
   You can test and debug your parser by using `Nvir.Parser.interpolate_var/2`
   and a simple resolver.
 
       iex> file_contents = "GREETING=$INTRO $WHO!"
-      iex> {:ok, [{"GREETING", template}]} = Nvir.Parser.RDB.parse_string(file_contents)
+      iex> {:ok, [{"GREETING", template}]} = Nvir.Parser.DefaultParser.parse_string(file_contents)
       iex> resolver = fn
       ...>   "INTRO" -> "Hello"
       ...>   "WHO" -> "World"
@@ -110,7 +109,7 @@ defmodule Nvir.Parser do
       iex> envfile = """
       iex> GREETING=Hello $NAME!
       iex> """
-      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.RDB.parse_string(envfile)
+      iex> {:ok, [{"GREETING", variable}]} = Nvir.Parser.DefaultParser.parse_string(envfile)
       iex> resolver = fn "NAME" -> "World" end
       iex> Nvir.Parser.interpolate_var(variable, resolver)
       "Hello World!"

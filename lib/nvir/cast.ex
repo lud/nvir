@@ -50,26 +50,50 @@ defmodule Nvir.Cast do
 
   # -- String -----------------------------------------------------------------
 
-  def cast(value, :string), do: {:ok, value}
+  def cast(value, :string) do
+    {:ok, value}
+  end
 
-  def cast("", :string?), do: {:ok, nil}
-  def cast(value, :string?), do: cast(value, :string)
+  def cast("", :string?) do
+    {:ok, nil}
+  end
 
-  def cast("", :string!), do: {:error, :empty}
-  def cast(value, :string!), do: cast(value, :string)
+  def cast(value, :string?) do
+    cast(value, :string)
+  end
+
+  def cast("", :string!) do
+    {:error, :empty}
+  end
+
+  def cast(value, :string!) do
+    cast(value, :string)
+  end
 
   # -- Atom -------------------------------------------------------------------
 
   # :atom converts everything
-  def cast(value, :atom), do: {:ok, String.to_atom(value)}
+  def cast(value, :atom) do
+    {:ok, String.to_atom(value)}
+  end
 
   # :atom? converts "" to nil
-  def cast("", :atom?), do: {:ok, nil}
-  def cast(value, :atom?), do: {:ok, String.to_atom(value)}
+  def cast("", :atom?) do
+    {:ok, nil}
+  end
+
+  def cast(value, :atom?) do
+    {:ok, String.to_atom(value)}
+  end
 
   # :atom! rejects ""
-  def cast("", :atom!), do: {:error, :empty}
-  def cast(value, :atom!), do: cast(value, :atom)
+  def cast("", :atom!) do
+    {:error, :empty}
+  end
+
+  def cast(value, :atom!) do
+    cast(value, :atom)
+  end
 
   # :existing_atom rejects non existing atoms
   def cast(value, :existing_atom) do
@@ -79,11 +103,21 @@ defmodule Nvir.Cast do
   end
 
   # :existing_atom? converts "" to nil
-  def cast("", :existing_atom?), do: {:ok, nil}
-  def cast(value, :existing_atom?), do: cast(value, :existing_atom)
+  def cast("", :existing_atom?) do
+    {:ok, nil}
+  end
 
-  def cast("", :existing_atom!), do: {:error, :empty}
-  def cast(value, :existing_atom!), do: cast(value, :existing_atom)
+  def cast(value, :existing_atom?) do
+    cast(value, :existing_atom)
+  end
+
+  def cast("", :existing_atom!) do
+    {:error, :empty}
+  end
+
+  def cast(value, :existing_atom!) do
+    cast(value, :existing_atom)
+  end
 
   # -- Boolean ----------------------------------------------------------------
 
@@ -107,11 +141,15 @@ defmodule Nvir.Cast do
   end
 
   # legacy
-  def cast(value, :boolean?), do: warn_cast(value, :boolean?, :boolean)
+  def cast(value, :boolean?) do
+    warn_cast(value, :boolean?, :boolean)
+  end
 
   # -- Integer ----------------------------------------------------------------
 
-  def cast("", :integer!), do: {:error, :empty}
+  def cast("", :integer!) do
+    {:error, :empty}
+  end
 
   def cast(value, :integer!) do
     case Integer.parse(value) do
@@ -120,15 +158,24 @@ defmodule Nvir.Cast do
     end
   end
 
-  def cast("", :integer?), do: {:ok, nil}
-  def cast(value, :integer?), do: cast(value, :integer!)
+  def cast("", :integer?) do
+    {:ok, nil}
+  end
+
+  def cast(value, :integer?) do
+    cast(value, :integer!)
+  end
 
   # legacy
-  def cast(value, :integer), do: warn_cast(value, :integer, :integer!)
+  def cast(value, :integer) do
+    warn_cast(value, :integer, :integer!)
+  end
 
   # -- Float ------------------------------------------------------------------
 
-  def cast("", :float!), do: {:error, :empty}
+  def cast("", :float!) do
+    {:error, :empty}
+  end
 
   def cast(value, :float!) do
     case Float.parse(value) do
@@ -137,11 +184,18 @@ defmodule Nvir.Cast do
     end
   end
 
-  def cast("", :float?), do: {:ok, nil}
-  def cast(value, :float?), do: cast(value, :float!)
+  def cast("", :float?) do
+    {:ok, nil}
+  end
+
+  def cast(value, :float?) do
+    cast(value, :float!)
+  end
 
   # legacy
-  def cast(value, :float), do: warn_cast(value, :float, :float!)
+  def cast(value, :float) do
+    warn_cast(value, :float, :float!)
+  end
 
   # -- Callback ---------------------------------------------------------------
 

@@ -12,7 +12,7 @@ defmodule Nvir do
 
   @enforce_keys [:enabled_sources]
   defstruct enabled_sources: %{},
-            parser: Nvir.Parser.RDB,
+            parser: Nvir.Parser.DefaultParser,
             cd: nil,
             before_env_set: nil
 
@@ -103,7 +103,9 @@ defmodule Nvir do
   end
 
   defp guess_env do
-    with :error <- guess_env_config(), do: guess_env_mix()
+    with :error <- guess_env_config() do
+      guess_env_mix()
+    end
   end
 
   defp guess_env_config do
@@ -113,9 +115,11 @@ defmodule Nvir do
   end
 
   defp guess_env_mix do
-    if Code.ensure_loaded?(Mix),
-      do: {:ok, Mix.env()},
-      else: :error
+    if Code.ensure_loaded?(Mix) do
+      {:ok, Mix.env()}
+    else
+      :error
+    end
   end
 
   defp ci_checks do
@@ -180,9 +184,11 @@ defmodule Nvir do
   end
 
   defp validate_opt!({k, v} = opt) do
-    if valid_opt?(opt),
-      do: opt,
-      else: raise(ArgumentError, "invalid dotenv option: #{inspect({k, v})}")
+    if valid_opt?(opt) do
+      opt
+    else
+      raise(ArgumentError, "invalid dotenv option: #{inspect({k, v})}")
+    end
   end
 
   defp valid_opt?({:enabled_sources, flags}) do
@@ -199,11 +205,21 @@ defmodule Nvir do
       end)
   end
 
-  defp valid_opt?({:parser, module}), do: is_atom(module)
-  defp valid_opt?({:cd, dir}), do: is_binary(dir) or is_nil(dir) or is_list(dir)
-  defp valid_opt?({:before_env_set, fun}), do: is_function(fun, 1)
+  defp valid_opt?({:parser, module}) do
+    is_atom(module)
+  end
 
-  defp valid_opt?(_other), do: false
+  defp valid_opt?({:cd, dir}) do
+    is_binary(dir) or is_nil(dir) or is_list(dir)
+  end
+
+  defp valid_opt?({:before_env_set, fun}) do
+    is_function(fun, 1)
+  end
+
+  defp valid_opt?(_other) do
+    false
+  end
 
   @doc """
   Enables or disables environment variable sources under the given tag.
@@ -415,13 +431,21 @@ defmodule Nvir do
     end)
   end
 
-  defp match_tags([], _enabled, kind), do: kind
-  defp match_tags([:overwrite | t], enabled, _kind), do: match_tags(t, enabled, :overwrite)
+  defp match_tags([], _enabled, kind) do
+    kind
+  end
 
-  defp match_tags([h | t], enabled, kind) when :erlang.map_get(h, enabled),
-    do: match_tags(t, enabled, kind)
+  defp match_tags([:overwrite | t], enabled, _kind) do
+    match_tags(t, enabled, :overwrite)
+  end
 
-  defp match_tags(_, _, _), do: :ignore
+  defp match_tags([h | t], enabled, kind) when :erlang.map_get(h, enabled) do
+    match_tags(t, enabled, kind)
+  end
+
+  defp match_tags(_, _, _) do
+    :ignore
+  end
 
   defp load_files(nvir, files) do
     %{parser: parser, cd: cd} = nvir
@@ -442,13 +466,20 @@ defmodule Nvir do
     end)
   end
 
-  defp expand_path(file, nil), do: file
-  defp expand_path(file, cd), do: Path.expand(file, cd)
+  defp expand_path(file, nil) do
+    file
+  end
+
+  defp expand_path(file, cd) do
+    Path.expand(file, cd)
+  end
 
   defp load_file(path, parser) do
-    if File.regular?(path),
-      do: parser.parse_file(path),
-      else: {:error, :enoent}
+    if File.regular?(path) do
+      parser.parse_file(path)
+    else
+      {:error, :enoent}
+    end
   end
 
   defp build_vars_regular(files_vars, sys_env) do
@@ -489,13 +520,17 @@ defmodule Nvir do
     # string in a linux shell.
     fn key ->
       with :error <- Map.fetch(vars, key),
-           :error <- Map.fetch(vars_fallback, key),
-           do: "",
-           else: ({:ok, v} -> v)
+           :error <- Map.fetch(vars_fallback, key) do
+        ""
+      else
+        ({:ok, v} -> v)
+      end
     end
   end
 
-  defp before_env_set(nil, variables), do: variables
+  defp before_env_set(nil, variables) do
+    variables
+  end
 
   defp before_env_set(fun, variables) do
     Map.new(variables, fn pair ->
