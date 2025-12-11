@@ -143,7 +143,7 @@ defmodule Nvir do
     source tags will be enabled when collecting sources. Defaults to the return
     value of `default_enabled_sources/0`.
   * `:parser` - The module to parse environment variables files. Defaults to
-    `Nvir.Parser.RDB`.
+    `m:Nvir.Parser.DefaultParser`.
   * `:cd` - A directory path to load relative source paths from.
   * `:before_env_set` - A function that accepts a `{varname, value}` tuple and
     must return a similar tuple. This gives the possibility to change or
