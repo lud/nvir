@@ -20,7 +20,7 @@ defmodule Nvir do
   @type source :: binary | {atom, source} | [source]
   @type sources :: source | [sources] | {atom, sources}
   @type var_def :: {String.t(), String.t()}
-  @type transformer :: (var_def -> var_def)
+  @type transformer :: (var_def -> var_def) | {module, atom, [term]}
   @type config_opt ::
           {:enabled_sources, %{atom => boolean}}
           | {:parser, module}
@@ -145,11 +145,13 @@ defmodule Nvir do
   * `:parser` - The module to parse environment variables files. Defaults to
     `m:Nvir.Parser.DefaultParser`.
   * `:cd` - A directory path to load relative source paths from.
-  * `:before_env_set` - A function that accepts a `{varname, value}` tuple and
-    must return a similar tuple. This gives the possibility to change or
-    transform the parsed variables before the environment is altered. Returned
-    `varname` and `value` must implement the `String.Chars` protocol. Returning
-    `nil` as a value will delete the environment variable.
+  * `:before_env_set` - A function or `{module, function, args}` tuple that
+    accepts a `{varname, value}` pair and must return a similar tuple. This
+    gives the possibility to change or transform the parsed variables before the
+    environment is altered. Returned `varname` and `value` must implement the
+    `String.Chars` protocol. Returning `nil` as a value will delete the
+    environment variable. When an MFA tuple is given, the pair is passed as the
+    first argument.
 
   ### Example
 
@@ -214,7 +216,11 @@ defmodule Nvir do
   end
 
   defp valid_opt?({:before_env_set, fun}) do
-    is_function(fun, 1)
+    case fun do
+      f when is_function(f, 1) -> true
+      {m, f, a} when is_atom(m) and is_atom(f) and is_list(a) -> true
+      _ -> false
+    end
   end
 
   defp valid_opt?(_other) do
@@ -532,9 +538,9 @@ defmodule Nvir do
     variables
   end
 
-  defp before_env_set(fun, variables) do
+  defp before_env_set(hook, variables) do
     Map.new(variables, fn pair ->
-      case fun.(pair) do
+      case call_hook(hook, pair) do
         {k, v} when is_binary(k) and is_binary(v) ->
           {k, v}
 
@@ -553,6 +559,14 @@ defmodule Nvir do
           raise "invalid :before_env_set return value: #{inspect(other)}"
       end
     end)
+  end
+
+  defp call_hook({m, f, args}, arg1) do
+    apply(m, f, [arg1 | args])
+  end
+
+  defp call_hook(fun, arg1) when is_function(fun, 1) do
+    fun.(arg1)
   end
 
   @doc """

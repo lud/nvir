@@ -485,6 +485,41 @@ defmodule NvirTest do
              } == changes
     end
 
+    def before_env_set_hook({k, v}, :arg2, :arg3) do
+      {k, String.upcase(v)}
+    end
+
+    test "variables transformer supports MFA" do
+      delete_key("MFA_REGULAR")
+      delete_key("MFA_OVERWRITE")
+
+      regular_file =
+        create_file("""
+        MFA_REGULAR=hello world
+        """)
+
+      overwrite_file =
+        create_file("""
+        MFA_OVERWRITE=hello mars
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set: {__MODULE__, :before_env_set_hook, [:arg2, :arg3]}
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      # The hook function just calls String.upcase
+      assert "HELLO WORLD" = System.fetch_env!("MFA_REGULAR")
+      assert "HELLO MARS" = System.fetch_env!("MFA_OVERWRITE")
+
+      assert %{
+               "MFA_REGULAR" => "HELLO WORLD",
+               "MFA_OVERWRITE" => "HELLO MARS"
+             } == changes
+    end
+
     test "the hook can return values that implement the String.Chars protocol" do
       delete_key("MEDIAN_VALUE")
       delete_key("some_atom_key")

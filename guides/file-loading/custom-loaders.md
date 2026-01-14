@@ -93,7 +93,12 @@ a name and value.
 The returned name and value must be encodable as strings using the `to_string/1`
 Elixir function.
 
-It _is_ possible to return a different name from there. The original variable name will _not_ be defined. We use this in the example below but it's generally not recommended for clarity's sake.
+It _is_ possible to return a different name from there. The original variable
+name will _not_ be defined. We use this in the example below but it's generally
+not recommended for clarity's sake.
+
+This hook also accepts an MFA tuple. In this case the variable key and value
+tuple is passed as the first argument.
 
 Example:
 
