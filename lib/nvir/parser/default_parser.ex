@@ -54,7 +54,7 @@ defmodule Nvir.Parser.DefaultParser do
     attach_error_content(error, content)
   end
 
-  case Application.compile_env(:nvir, :diszplay_file_contents_in_errors) do
+  case Application.compile_env(:nvir, :display_file_contents_in_errors) do
     true ->
       defp attach_error_content(error, content) do
         Nvir.Parser.ParseError.with_debug_content(error, content)
