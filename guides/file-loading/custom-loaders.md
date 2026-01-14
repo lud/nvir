@@ -145,7 +145,8 @@ It is also possible to return a list, stream, or any other enumerable of `{name,
 value}` as long as each value in the enumerable is a pair for string-able
 elements.
 
-If both hooks are defined, this hook is called after `:before_env_set` and receives the updated values from the previous hook.
+If both hooks are defined, this hook is called after `:before_env_set` and
+receives the updated values from the previous hook.
 
 Example:
 

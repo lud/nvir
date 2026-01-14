@@ -30,7 +30,8 @@ caster. See later for a description of both.
 env!("PORT", :integer!)
 ```
 
-This will attempt to fetch the variable as in `System.fetch_env!("SOME_KEY")`, cast its value to an integer and return that value.
+This will attempt to fetch the variable as in `System.fetch_env!("SOME_KEY")`,
+cast its value to an integer and return that value.
 
 Two exceptions may be raised from that call:
 
@@ -51,7 +52,8 @@ the value as-is, given it is defined.
 
 Use `env!/3` to provide a default value.
 
-Default values are not used when a variable is found, even if the cast fails, if the variable is empty, or whatever.
+Default values are not used when a variable is found, even if the cast fails, if
+the variable is empty, or whatever.
 
 ```elixir
 env!("PORT", :integer!, 4000)
@@ -64,7 +66,8 @@ Default values are not validated by the caster:
 env!("TIMEOUT", :integer!, :infinity)
 ```
 
-If the default value is a function, it is called only if the variable is not defined. This is useful when the default value is expensive to compute.
+If the default value is a function, it is called only if the variable is not
+defined. This is useful when the default value is expensive to compute.
 
 ```elixir
 env!("SECRET_KEY_BASE", :string!, fn ->
