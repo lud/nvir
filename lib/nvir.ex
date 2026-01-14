@@ -14,18 +14,21 @@ defmodule Nvir do
   defstruct enabled_sources: %{},
             parser: Nvir.Parser.DefaultParser,
             cd: nil,
-            before_env_set: nil
+            before_env_set: nil,
+            before_env_set_all: nil
 
   @type t :: %__MODULE__{enabled_sources: %{atom => boolean}, parser: module, cd: nil | Path.t()}
   @type source :: binary | {atom, source} | [source]
   @type sources :: source | [sources] | {atom, sources}
   @type var_def :: {String.t(), String.t()}
-  @type transformer :: (var_def -> var_def) | {module, atom, [term]}
+  @type pair_transformer :: (var_def -> var_def) | {module, atom, [term]}
   @type config_opt ::
           {:enabled_sources, %{atom => boolean}}
           | {:parser, module}
           | {:cd, nil | Path.t()}
-          | {:before_env_set, transformer}
+          | {:before_env_set, pair_transformer}
+          | {:before_env_set_all,
+             (%{binary => binary} -> Enumerable.t(var_def)) | {module, atom, [term]}}
 
   @doc """
   Returns a configuration for `dotenv!/2` without any enabled source.
@@ -152,6 +155,15 @@ defmodule Nvir do
     `String.Chars` protocol. Returning `nil` as a value will delete the
     environment variable. When an MFA tuple is given, the pair is passed as the
     first argument.
+  * `:before_env_set_all` - A function or `{module, function, args}` tuple that
+    accepts an map of `%{varname => value}` and must return an enumerable of
+    `{varname, value}` to set. This gives the possibility to skip some
+    variables, or to change their values before the environment is altered.
+    Returned `varname` and `value` must implement the `String.Chars` protocol.
+    Returning `nil` as a value will delete the environment variable. When an MFA
+    tuple is given, the pair is passed as the first argument. This hook is
+    called after `:before_env_set` so if you define both hooks, it will receive
+    the values altered by `:before_env_set`.
 
   ### Example
 
@@ -216,6 +228,14 @@ defmodule Nvir do
   end
 
   defp valid_opt?({:before_env_set, fun}) do
+    case fun do
+      f when is_function(f, 1) -> true
+      {m, f, a} when is_atom(m) and is_atom(f) and is_list(a) -> true
+      _ -> false
+    end
+  end
+
+  defp valid_opt?({:before_env_set_all, fun}) do
     case fun do
       f when is_function(f, 1) -> true
       {m, f, a} when is_atom(m) and is_atom(f) and is_list(a) -> true
@@ -396,7 +416,12 @@ defmodule Nvir do
     to_add_overwrites = build_vars_overwrite(parsed_overwrites, existing_vars_1)
     transformed_overwrites = before_env_set(nvir.before_env_set, to_add_overwrites)
 
-    to_add = Map.merge(transformed_regular, transformed_overwrites)
+    to_add =
+      before_env_set_all(
+        nvir.before_env_set_all,
+        Map.merge(transformed_regular, transformed_overwrites)
+      )
+
     :ok = System.put_env(to_add)
 
     to_add
@@ -539,26 +564,51 @@ defmodule Nvir do
   end
 
   defp before_env_set(hook, variables) do
-    Map.new(variables, fn pair ->
-      case call_hook(hook, pair) do
-        {k, v} when is_binary(k) and is_binary(v) ->
-          {k, v}
+    Map.new(variables, fn pair -> to_string_pair(call_hook(hook, pair), :before_env_set) end)
+  end
 
-        {k, v} ->
+  defp before_env_set_all(nil, variables) do
+    variables
+  end
+
+  defp before_env_set_all(hook, variables) do
+    enum =
+      case call_hook(hook, variables) do
+        enum when is_map(enum) when is_list(enum) when is_struct(enum, Stream) ->
+          enum
+
+        enum ->
           try do
-            k = to_string(k)
-            v = to_string(v)
-            {k, v}
+            Enum.to_list(enum)
           rescue
             e in Protocol.UndefinedError ->
-              reraise "invalid :before_env_set return value (could not convert to string): #{inspect(e.value)}",
+              reraise "invalid #{inspect(:before_env_set_all)} hook return value (not an enumerable): #{inspect(e.value)}",
                       __STACKTRACE__
           end
-
-        other ->
-          raise "invalid :before_env_set return value: #{inspect(other)}"
       end
-    end)
+
+    Map.new(enum, &to_string_pair(&1, :before_env_set_all))
+  end
+
+  defp to_string_pair(pair, hook_name) do
+    case pair do
+      {k, v} when is_binary(k) and is_binary(v) ->
+        {k, v}
+
+      {k, v} ->
+        try do
+          k = to_string(k)
+          v = to_string(v)
+          {k, v}
+        rescue
+          e in Protocol.UndefinedError ->
+            reraise "invalid #{inspect(hook_name)} hook return value (could not convert to string): #{inspect(e.value)}",
+                    __STACKTRACE__
+        end
+
+      other ->
+        raise "invalid #{inspect(hook_name)} hook return value: #{inspect(other)}"
+    end
   end
 
   defp call_hook({m, f, args}, arg1) do

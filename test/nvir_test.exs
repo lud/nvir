@@ -420,7 +420,7 @@ defmodule NvirTest do
     end
   end
 
-  describe "pre declare hook" do
+  describe "before_env_set hook" do
     test "variables should be transformed before being set" do
       delete_key("CHANGED_KEY")
       delete_key("COMMON_SWAPPED")
@@ -557,6 +557,168 @@ defmodule NvirTest do
                "some_atom_key" => "hello=world",
                "USER_HOMEPAGE" => "http://homepage.com/alice"
              } == changes
+    end
+  end
+
+  describe "before_env_set_all hook" do
+    test "variables should be transformed before being set (using before_env_set_all)" do
+      delete_key("HOOKED")
+      delete_key("NOT_HOOKED")
+      delete_key("COMMON")
+      delete_key("COMMON_SWAPPED")
+      delete_key("SWAPPED_KEY")
+      delete_key("OVERWRITE_HOOKED")
+      delete_key("OVERWRITE_NOT_HOOKED")
+      delete_key("STRINGKEY")
+      delete_key("MEDIAN_VALUE")
+      delete_key("USERNAME")
+      delete_key("USER_HOMEPAGE")
+      delete_key("WILL_BE_SKIPPED")
+      delete_key("some_atom_key")
+
+      regular_file =
+        create_file("""
+        HOOKED=hello world
+        NOT_HOOKED=hello moon
+        COMMON=in regular
+        STRINGKEY=stringval
+        MEDIAN_VALUE=will be a number
+        USERNAME=alice
+        WILL_BE_SKIPPED=hello
+        """)
+
+      overwrite_file =
+        create_file("""
+        OVERWRITE_HOOKED=hello mars
+        OVERWRITE_NOT_HOOKED=hello saturn
+        COMMON=in overwrite
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            # vars is a map of all variables that are about to be set.
+            # "COMMON" is "in overwrite" because it's the last one processed.
+            vars
+            |> Map.new(fn
+              {"HOOKED", v} ->
+                {"HOOKED", String.upcase(v)}
+
+              {"OVERWRITE_HOOKED", v} ->
+                {"SWAPPED_KEY", v}
+
+              {"COMMON", "in overwrite"} ->
+                {"COMMON_SWAPPED", "nasty"}
+
+              {"STRINGKEY", _} ->
+                {:some_atom_key, [~c"hello", ?=, ~c"world"]}
+
+              {"MEDIAN_VALUE", _} ->
+                {"MEDIAN_VALUE", 45.67}
+
+              {"USERNAME", v} ->
+                {"USER_HOMEPAGE", %{URI.parse("http://homepage.com/") | path: "/#{v}"}}
+
+              {k, v} ->
+                {k, v}
+            end)
+            |> Map.delete("WILL_BE_SKIPPED")
+          end
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "HELLO WORLD" = System.fetch_env!("HOOKED")
+      assert "hello moon" = System.fetch_env!("NOT_HOOKED")
+      assert "hello mars" = System.fetch_env!("SWAPPED_KEY")
+      assert "hello saturn" = System.fetch_env!("OVERWRITE_NOT_HOOKED")
+      assert "nasty" = System.fetch_env!("COMMON_SWAPPED")
+      assert :error = System.fetch_env("COMMON")
+      assert :error = System.fetch_env("OVERWRITE_HOOKED")
+
+      assert "hello=world" = System.fetch_env!("some_atom_key")
+      assert "45.67" = System.fetch_env!("MEDIAN_VALUE")
+      assert "http://homepage.com/alice" = System.fetch_env!("USER_HOMEPAGE")
+
+      assert %{
+               "SWAPPED_KEY" => "hello mars",
+               "COMMON_SWAPPED" => "nasty",
+               "HOOKED" => "HELLO WORLD",
+               "NOT_HOOKED" => "hello moon",
+               "OVERWRITE_NOT_HOOKED" => "hello saturn",
+               "MEDIAN_VALUE" => "45.67",
+               "some_atom_key" => "hello=world",
+               "USER_HOMEPAGE" => "http://homepage.com/alice"
+             } == changes
+    end
+
+    test "before_env_set_all hook can return a stream" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            Stream.map(vars, fn {k, v} -> {String.to_atom(k), String.upcase(v)} end)
+          end
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+
+      assert "VAL1" = System.fetch_env!("REGULAR")
+      assert "VAL2" = System.fetch_env!("OVERWRITE")
+      assert %{"REGULAR" => "VAL1", "OVERWRITE" => "VAL2"} == changes
+    end
+
+    test "before_env_set_all hook must return enumerable" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError,
+                   "invalid :before_env_set_all hook return value (not an enumerable): :some_atom",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(before_env_set_all: fn _ -> :some_atom end)
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
+    end
+
+    test "before_env_set_all hook must return pairs in enumerable" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError, "invalid :before_env_set_all hook return value: :hello", fn ->
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(before_env_set_all: fn _ -> [:hello] end)
+        |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+      end
+    end
+
+    test "before_env_set_all hook must return stringable pairs" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError,
+                   "invalid :before_env_set_all hook return value (could not convert to string): {:a, :tuple}",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(
+                       before_env_set_all: fn _ -> [{"someval", {:a, :tuple}}] end
+                     )
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
     end
   end
 
