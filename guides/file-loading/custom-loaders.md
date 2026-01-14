@@ -84,7 +84,7 @@ dotenv_new()
 
 ## Transforming the variables
 
-Nvir supports hooks when loading variables from a file
+Nvir supports hooks when loading variables from a file to allow transformation of value before the system environment is altered.
 
 ### Hook :before_env_set
 
@@ -144,6 +144,8 @@ name and value can be encoded as string using `to_string/1`.
 It is also possible to return a list, stream, or any other enumerable of `{name,
 value}` as long as each value in the enumerable is a pair for string-able
 elements.
+
+If both hooks are defined, this hook is called after `:before_env_set` and receives the updated values from the previous hook.
 
 Example:
 
