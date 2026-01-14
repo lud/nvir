@@ -561,6 +561,10 @@ defmodule NvirTest do
   end
 
   describe "before_env_set_all hook" do
+    def before_env_set_all_hook(vars, :arg2, :arg3) do
+      Map.new(vars, fn {k, v} -> {k, String.upcase(v)} end)
+    end
+
     test "variables should be transformed before being set (using before_env_set_all)" do
       delete_key("HOOKED")
       delete_key("NOT_HOOKED")
@@ -671,6 +675,29 @@ defmodule NvirTest do
       assert "VAL1" = System.fetch_env!("REGULAR")
       assert "VAL2" = System.fetch_env!("OVERWRITE")
       assert %{"REGULAR" => "VAL1", "OVERWRITE" => "VAL2"} == changes
+    end
+
+    test "before_env_set_all hook supports MFA" do
+      delete_key("MFA_REGULAR")
+      delete_key("MFA_OVERWRITE")
+
+      regular_file = create_file("MFA_REGULAR=hello world")
+      overwrite_file = create_file("MFA_OVERWRITE=hello mars")
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: {__MODULE__, :before_env_set_all_hook, [:arg2, :arg3]}
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "HELLO WORLD" = System.fetch_env!("MFA_REGULAR")
+      assert "HELLO MARS" = System.fetch_env!("MFA_OVERWRITE")
+
+      assert %{
+               "MFA_REGULAR" => "HELLO WORLD",
+               "MFA_OVERWRITE" => "HELLO MARS"
+             } == changes
     end
 
     test "before_env_set_all hook must return enumerable" do
