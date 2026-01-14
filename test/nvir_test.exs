@@ -723,11 +723,13 @@ defmodule NvirTest do
       regular_file = create_file("REGULAR=val1")
       overwrite_file = create_file("OVERWRITE=val2")
 
-      assert_raise RuntimeError, "invalid :before_env_set_all hook return value: :hello", fn ->
-        Nvir.dotenv_loader()
-        |> Nvir.dotenv_configure(before_env_set_all: fn _ -> [:hello] end)
-        |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
-      end
+      assert_raise RuntimeError,
+                   "invalid pair in :before_env_set_all hook return value: :hello",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(before_env_set_all: fn _ -> [:hello] end)
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
     end
 
     test "before_env_set_all hook must return stringable pairs" do

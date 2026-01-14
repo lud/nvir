@@ -607,7 +607,13 @@ defmodule Nvir do
         end
 
       other ->
-        raise "invalid #{inspect(hook_name)} hook return value: #{inspect(other)}"
+        case hook_name do
+          :before_env_set ->
+            raise "invalid #{inspect(hook_name)} hook return value: #{inspect(other)}"
+
+          :before_env_set_all ->
+            raise "invalid pair in #{inspect(hook_name)} hook return value: #{inspect(other)}"
+        end
     end
   end
 
