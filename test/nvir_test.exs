@@ -1,5 +1,6 @@
 defmodule NvirTest do
   alias Nvir.Cast
+  alias Nvir.Test.PseudoSecretManager
   use ExUnit.Case, async: false
 
   doctest Nvir
@@ -158,9 +159,8 @@ defmodule NvirTest do
   # Ensures that the key is not defined in the environment, and schedules it's
   # cleanup after the test
   defp delete_key(key) do
-    System.delete_env(key)
-    assert :error = System.fetch_env(key)
-    on_exit(fn -> _clear_key(key) end)
+    clear_key(key)
+    on_exit(fn -> clear_key(key) end)
     key
   end
 
@@ -170,11 +170,11 @@ defmodule NvirTest do
   defp put_key(key, value) do
     System.put_env(key, value)
     assert {:ok, ^value} = System.fetch_env(key)
-    on_exit(fn -> _clear_key(key) end)
+    on_exit(fn -> clear_key(key) end)
     key
   end
 
-  defp _clear_key(key) do
+  defp clear_key(key) do
     :ok = System.delete_env(key)
     assert :error = System.fetch_env(key)
   end
@@ -748,6 +748,224 @@ defmodule NvirTest do
                      )
                      |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
                    end
+    end
+
+    test "resolves secret:// URIs with JSON fragment syntax" do
+      delete_key("DATABASE_URL")
+      delete_key("DATABASE_USER")
+      delete_key("DATABASE_PASS")
+      delete_key("API_KEY")
+      delete_key("PLAIN_VALUE")
+
+      file =
+        create_file("""
+        DATABASE_URL=secret:///db/prod/credentials#url
+        DATABASE_USER=secret:///db/prod/credentials#username
+        DATABASE_PASS=secret:///db/prod/credentials#password
+        API_KEY=secret:///api/keys#prod
+        PLAIN_VALUE=just_a_string
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+        |> Nvir.dotenv!(file)
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("DATABASE_URL")
+      assert "prod_user" = System.fetch_env!("DATABASE_USER")
+      assert "super_secret_pass" = System.fetch_env!("DATABASE_PASS")
+      assert "pk_live_abc123" = System.fetch_env!("API_KEY")
+      assert "just_a_string" = System.fetch_env!("PLAIN_VALUE")
+
+      assert %{
+               "DATABASE_URL" => "postgres://prod.example.com:5432/mydb",
+               "DATABASE_USER" => "prod_user",
+               "DATABASE_PASS" => "super_secret_pass",
+               "API_KEY" => "pk_live_abc123",
+               "PLAIN_VALUE" => "just_a_string"
+             } == changes
+    end
+
+    test "caches decoded JSON blobs efficiently" do
+      delete_key("DATABASE_URL")
+      delete_key("DATABASE_USER")
+      delete_key("DATABASE_PASS")
+      delete_key("API_KEY")
+      delete_key("API_DEBUG_KEY")
+      delete_key("CACHE_TEST")
+      delete_key("CACHE_TEST_2")
+
+      file =
+        create_file("""
+        DATABASE_URL=secret:///db/prod/credentials#url
+        DATABASE_USER=secret:///db/prod/credentials#username
+        DATABASE_PASS=secret:///db/prod/credentials#password
+        API_KEY=secret:///api/keys#prod
+        API_DEBUG_KEY=secret:///api/keys#debug
+        CACHE_TEST=secret:///cache/test#value
+        CACHE_TEST_2=secret:///cache/test#value
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        },
+        "/cache/test" => %{"value" => "cached_value_123"}
+      })
+
+      _changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            {resolved, stats} = PseudoSecretManager.resolve_all_with_stats(vars)
+            send(self(), {:stats, stats})
+            resolved
+          end
+        )
+        |> Nvir.dotenv!(file)
+
+      assert_received {:stats, stats}
+
+      # Should fetch 3 unique secrets
+      assert stats.fetches == 3
+      # Should have 4 cache hits (7 total vars - 3 fetches)
+      assert stats.hits == 4
+      # Should have 3 unique secrets cached
+      assert map_size(stats.cache) == 3
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("DATABASE_URL")
+      assert "prod_user" = System.fetch_env!("DATABASE_USER")
+      assert "super_secret_pass" = System.fetch_env!("DATABASE_PASS")
+      assert "pk_live_abc123" = System.fetch_env!("API_KEY")
+      assert "pk_test_xyz789" = System.fetch_env!("API_DEBUG_KEY")
+      assert "cached_value_123" = System.fetch_env!("CACHE_TEST")
+      assert "cached_value_123" = System.fetch_env!("CACHE_TEST_2")
+    end
+
+    test "resolves secret without fragment as full JSON" do
+      delete_key("FULL_SECRET")
+
+      file = create_file("FULL_SECRET=secret:///api/keys")
+
+      PseudoSecretManager.mock(%{
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      Nvir.dotenv_loader()
+      |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+      |> Nvir.dotenv!(file)
+
+      json = System.fetch_env!("FULL_SECRET")
+      decoded = JSON.decode!(json)
+
+      assert %{"prod" => "pk_live_abc123", "debug" => "pk_test_xyz789"} == decoded
+    end
+
+    test "works with overwrite sources" do
+      delete_key("PROD_DB_URL")
+      delete_key("PROD_DB_USER")
+      delete_key("API_KEY")
+
+      regular_file =
+        create_file("""
+        PROD_DB_URL=secret:///db/prod/credentials#url
+        PROD_DB_USER=secret:///db/prod/credentials#username
+        """)
+
+      overwrite_file =
+        create_file("""
+        API_KEY=secret:///api/keys#debug
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("PROD_DB_URL")
+      assert "prod_user" = System.fetch_env!("PROD_DB_USER")
+      assert "pk_test_xyz789" = System.fetch_env!("API_KEY")
+
+      assert %{
+               "PROD_DB_URL" => "postgres://prod.example.com:5432/mydb",
+               "PROD_DB_USER" => "prod_user",
+               "API_KEY" => "pk_test_xyz789"
+             } == changes
+    end
+
+    test "verifies hook execution order" do
+      delete_key("PREFIXED_URL")
+      delete_key("DB_URL")
+      delete_key("PLAIN")
+
+      file =
+        create_file("""
+        DB_URL=secret:///db/prod/credentials#url
+        PLAIN=value
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: {PseudoSecretManager, :resolve_all, []},
+          before_env_set: fn
+            {"DB_URL", v} -> {"PREFIXED_URL", v}
+            other -> other
+          end
+        )
+        |> Nvir.dotenv!(file)
+
+      # If before_env_set_all ran first, PseudoSecretManager would see DB_URL and raise.
+      # Since it doesn't raise, before_env_set must have run first and renamed it to PREFIXED_URL.
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("PREFIXED_URL")
+      assert "value" = System.fetch_env!("PLAIN")
+      assert :error = System.fetch_env("DB_URL")
+
+      assert %{
+               "PREFIXED_URL" => "postgres://prod.example.com:5432/mydb",
+               "PLAIN" => "value"
+             } == changes
     end
   end
 
