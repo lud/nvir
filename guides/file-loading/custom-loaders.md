@@ -84,6 +84,10 @@ dotenv_new()
 
 ## Transforming the variables
 
+Nvir supports hooks when loading variables from a file to allow transformation of value before the system environment is altered.
+
+### Hook :before_env_set
+
 It is possible to change the keys and values of the variables before they are
 defined in the environment, by using the `:before_env_set` hook.
 
@@ -93,10 +97,16 @@ a name and value.
 The returned name and value must be encodable as strings using the `to_string/1`
 Elixir function.
 
-It _is_ possible to return a different name from there. The original variable name will _not_ be defined. We use this in the example below but it's generally not recommended for clarity's sake.
+It _is_ possible to return a different name from there. The original variable
+name will _not_ be defined. We use this in the example below but it's generally
+not recommended for clarity's sake.
+
+This hook also accepts an MFA tuple. In this case the variable key and value
+tuple is passed as the first argument.
 
 Example:
 
+<!-- rdmx :section name:"hook_each" format:true  -->
 ```elixir
 # runtime.exs
 import Config
@@ -116,8 +126,46 @@ dotenv_new()
 )
 |> dotenv!(".env")
 ```
+<!-- rdmx /:section -->
 
 * The transformation returns a different variable name.
 * The `USERNAME` variable will not be set by Nvir.
 * The `HOMEPAGE` variable is returned with an atom key and a `URI` struct value.
 * Nvir will set both key and values as strings in the System environment.
+
+### Hook :before_env_set_all
+
+This hook follows the same rules as the `:before_env_set` hook but the function
+is called only once with a map of all variables that will be defined.
+
+The expected return value is a map of variables `%{name => value}` where the
+name and value can be encoded as string using `to_string/1`.
+
+It is also possible to return a list, stream, or any other enumerable of `{name,
+value}` as long as each value in the enumerable is a pair for string-able
+elements.
+
+If both hooks are defined, this hook is called after `:before_env_set` and
+receives the updated values from the previous hook.
+
+Example:
+
+<!-- rdmx :section name:"hook_all" format:true  -->
+```elixir
+# runtime.exs
+import Config
+import Nvir
+
+dotenv_new()
+|> dotenv_configure(
+  before_env_set_all: fn vars ->
+    if Map.has_key?(vars, "LOG_LEVEL") and Map.get(vars, "DEBUG") == true do
+      Map.delete(vars, "LOG_LEVEL")
+    else
+      vars
+    end
+  end
+)
+|> dotenv!(".env")
+```
+<!-- rdmx /:section -->

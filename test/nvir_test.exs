@@ -1,5 +1,6 @@
 defmodule NvirTest do
   alias Nvir.Cast
+  alias Nvir.Test.PseudoSecretManager
   use ExUnit.Case, async: false
 
   doctest Nvir
@@ -158,9 +159,8 @@ defmodule NvirTest do
   # Ensures that the key is not defined in the environment, and schedules it's
   # cleanup after the test
   defp delete_key(key) do
-    System.delete_env(key)
-    assert :error = System.fetch_env(key)
-    on_exit(fn -> _clear_key(key) end)
+    clear_key(key)
+    on_exit(fn -> clear_key(key) end)
     key
   end
 
@@ -170,11 +170,11 @@ defmodule NvirTest do
   defp put_key(key, value) do
     System.put_env(key, value)
     assert {:ok, ^value} = System.fetch_env(key)
-    on_exit(fn -> _clear_key(key) end)
+    on_exit(fn -> clear_key(key) end)
     key
   end
 
-  defp _clear_key(key) do
+  defp clear_key(key) do
     :ok = System.delete_env(key)
     assert :error = System.fetch_env(key)
   end
@@ -420,7 +420,7 @@ defmodule NvirTest do
     end
   end
 
-  describe "pre declare hook" do
+  describe "before_env_set hook" do
     test "variables should be transformed before being set" do
       delete_key("CHANGED_KEY")
       delete_key("COMMON_SWAPPED")
@@ -485,6 +485,41 @@ defmodule NvirTest do
              } == changes
     end
 
+    def before_env_set_hook({k, v}, :arg2, :arg3) do
+      {k, String.upcase(v)}
+    end
+
+    test "variables transformer supports MFA" do
+      delete_key("MFA_REGULAR")
+      delete_key("MFA_OVERWRITE")
+
+      regular_file =
+        create_file("""
+        MFA_REGULAR=hello world
+        """)
+
+      overwrite_file =
+        create_file("""
+        MFA_OVERWRITE=hello mars
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set: {__MODULE__, :before_env_set_hook, [:arg2, :arg3]}
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      # The hook function just calls String.upcase
+      assert "HELLO WORLD" = System.fetch_env!("MFA_REGULAR")
+      assert "HELLO MARS" = System.fetch_env!("MFA_OVERWRITE")
+
+      assert %{
+               "MFA_REGULAR" => "HELLO WORLD",
+               "MFA_OVERWRITE" => "HELLO MARS"
+             } == changes
+    end
+
     test "the hook can return values that implement the String.Chars protocol" do
       delete_key("MEDIAN_VALUE")
       delete_key("some_atom_key")
@@ -521,6 +556,415 @@ defmodule NvirTest do
                "MEDIAN_VALUE" => "45.67",
                "some_atom_key" => "hello=world",
                "USER_HOMEPAGE" => "http://homepage.com/alice"
+             } == changes
+    end
+  end
+
+  describe "before_env_set_all hook" do
+    def before_env_set_all_hook(vars, :arg2, :arg3) do
+      Map.new(vars, fn {k, v} -> {k, String.upcase(v)} end)
+    end
+
+    test "variables should be transformed before being set (using before_env_set_all)" do
+      delete_key("HOOKED")
+      delete_key("NOT_HOOKED")
+      delete_key("COMMON")
+      delete_key("COMMON_SWAPPED")
+      delete_key("SWAPPED_KEY")
+      delete_key("OVERWRITE_HOOKED")
+      delete_key("OVERWRITE_NOT_HOOKED")
+      delete_key("STRINGKEY")
+      delete_key("MEDIAN_VALUE")
+      delete_key("USERNAME")
+      delete_key("USER_HOMEPAGE")
+      delete_key("WILL_BE_SKIPPED")
+      delete_key("some_atom_key")
+
+      regular_file =
+        create_file("""
+        HOOKED=hello world
+        NOT_HOOKED=hello moon
+        COMMON=in regular
+        STRINGKEY=stringval
+        MEDIAN_VALUE=will be a number
+        USERNAME=alice
+        WILL_BE_SKIPPED=hello
+        """)
+
+      overwrite_file =
+        create_file("""
+        OVERWRITE_HOOKED=hello mars
+        OVERWRITE_NOT_HOOKED=hello saturn
+        COMMON=in overwrite
+        """)
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            # vars is a map of all variables that are about to be set.
+            # "COMMON" is "in overwrite" because it's the last one processed.
+            vars
+            |> Map.new(fn
+              {"HOOKED", v} ->
+                {"HOOKED", String.upcase(v)}
+
+              {"OVERWRITE_HOOKED", v} ->
+                {"SWAPPED_KEY", v}
+
+              {"COMMON", "in overwrite"} ->
+                {"COMMON_SWAPPED", "nasty"}
+
+              {"STRINGKEY", _} ->
+                {:some_atom_key, [~c"hello", ?=, ~c"world"]}
+
+              {"MEDIAN_VALUE", _} ->
+                {"MEDIAN_VALUE", 45.67}
+
+              {"USERNAME", v} ->
+                {"USER_HOMEPAGE", %{URI.parse("http://homepage.com/") | path: "/#{v}"}}
+
+              {k, v} ->
+                {k, v}
+            end)
+            |> Map.delete("WILL_BE_SKIPPED")
+          end
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "HELLO WORLD" = System.fetch_env!("HOOKED")
+      assert "hello moon" = System.fetch_env!("NOT_HOOKED")
+      assert "hello mars" = System.fetch_env!("SWAPPED_KEY")
+      assert "hello saturn" = System.fetch_env!("OVERWRITE_NOT_HOOKED")
+      assert "nasty" = System.fetch_env!("COMMON_SWAPPED")
+      assert :error = System.fetch_env("COMMON")
+      assert :error = System.fetch_env("OVERWRITE_HOOKED")
+
+      assert "hello=world" = System.fetch_env!("some_atom_key")
+      assert "45.67" = System.fetch_env!("MEDIAN_VALUE")
+      assert "http://homepage.com/alice" = System.fetch_env!("USER_HOMEPAGE")
+
+      assert %{
+               "SWAPPED_KEY" => "hello mars",
+               "COMMON_SWAPPED" => "nasty",
+               "HOOKED" => "HELLO WORLD",
+               "NOT_HOOKED" => "hello moon",
+               "OVERWRITE_NOT_HOOKED" => "hello saturn",
+               "MEDIAN_VALUE" => "45.67",
+               "some_atom_key" => "hello=world",
+               "USER_HOMEPAGE" => "http://homepage.com/alice"
+             } == changes
+    end
+
+    test "before_env_set_all hook can return a stream" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            Stream.map(vars, fn {k, v} -> {String.to_atom(k), String.upcase(v)} end)
+          end
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+
+      assert "VAL1" = System.fetch_env!("REGULAR")
+      assert "VAL2" = System.fetch_env!("OVERWRITE")
+      assert %{"REGULAR" => "VAL1", "OVERWRITE" => "VAL2"} == changes
+    end
+
+    test "before_env_set_all hook supports MFA" do
+      delete_key("MFA_REGULAR")
+      delete_key("MFA_OVERWRITE")
+
+      regular_file = create_file("MFA_REGULAR=hello world")
+      overwrite_file = create_file("MFA_OVERWRITE=hello mars")
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: {__MODULE__, :before_env_set_all_hook, [:arg2, :arg3]}
+        )
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "HELLO WORLD" = System.fetch_env!("MFA_REGULAR")
+      assert "HELLO MARS" = System.fetch_env!("MFA_OVERWRITE")
+
+      assert %{
+               "MFA_REGULAR" => "HELLO WORLD",
+               "MFA_OVERWRITE" => "HELLO MARS"
+             } == changes
+    end
+
+    test "before_env_set_all hook must return enumerable" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError,
+                   "invalid :before_env_set_all hook return value (not an enumerable): :some_atom",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(before_env_set_all: fn _ -> :some_atom end)
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
+    end
+
+    test "before_env_set_all hook must return pairs in enumerable" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError,
+                   "invalid pair in :before_env_set_all hook return value: :hello",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(before_env_set_all: fn _ -> [:hello] end)
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
+    end
+
+    test "before_env_set_all hook must return stringable pairs" do
+      delete_key("REGULAR")
+      delete_key("OVERWRITE")
+
+      regular_file = create_file("REGULAR=val1")
+      overwrite_file = create_file("OVERWRITE=val2")
+
+      assert_raise RuntimeError,
+                   "invalid :before_env_set_all hook return value (could not convert to string): {:a, :tuple}",
+                   fn ->
+                     Nvir.dotenv_loader()
+                     |> Nvir.dotenv_configure(
+                       before_env_set_all: fn _ -> [{"someval", {:a, :tuple}}] end
+                     )
+                     |> Nvir.dotenv!([regular_file, overwrite: [overwrite: overwrite_file]])
+                   end
+    end
+
+    test "resolves secret:// URIs with JSON fragment syntax" do
+      delete_key("DATABASE_URL")
+      delete_key("DATABASE_USER")
+      delete_key("DATABASE_PASS")
+      delete_key("API_KEY")
+      delete_key("PLAIN_VALUE")
+
+      file =
+        create_file("""
+        DATABASE_URL=secret:///db/prod/credentials#url
+        DATABASE_USER=secret:///db/prod/credentials#username
+        DATABASE_PASS=secret:///db/prod/credentials#password
+        API_KEY=secret:///api/keys#prod
+        PLAIN_VALUE=just_a_string
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+        |> Nvir.dotenv!(file)
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("DATABASE_URL")
+      assert "prod_user" = System.fetch_env!("DATABASE_USER")
+      assert "super_secret_pass" = System.fetch_env!("DATABASE_PASS")
+      assert "pk_live_abc123" = System.fetch_env!("API_KEY")
+      assert "just_a_string" = System.fetch_env!("PLAIN_VALUE")
+
+      assert %{
+               "DATABASE_URL" => "postgres://prod.example.com:5432/mydb",
+               "DATABASE_USER" => "prod_user",
+               "DATABASE_PASS" => "super_secret_pass",
+               "API_KEY" => "pk_live_abc123",
+               "PLAIN_VALUE" => "just_a_string"
+             } == changes
+    end
+
+    test "caches decoded JSON blobs efficiently" do
+      delete_key("DATABASE_URL")
+      delete_key("DATABASE_USER")
+      delete_key("DATABASE_PASS")
+      delete_key("API_KEY")
+      delete_key("API_DEBUG_KEY")
+      delete_key("CACHE_TEST")
+      delete_key("CACHE_TEST_2")
+
+      file =
+        create_file("""
+        DATABASE_URL=secret:///db/prod/credentials#url
+        DATABASE_USER=secret:///db/prod/credentials#username
+        DATABASE_PASS=secret:///db/prod/credentials#password
+        API_KEY=secret:///api/keys#prod
+        API_DEBUG_KEY=secret:///api/keys#debug
+        CACHE_TEST=secret:///cache/test#value
+        CACHE_TEST_2=secret:///cache/test#value
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        },
+        "/cache/test" => %{"value" => "cached_value_123"}
+      })
+
+      _changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: fn vars ->
+            {resolved, stats} = PseudoSecretManager.resolve_all_with_stats(vars)
+            send(self(), {:stats, stats})
+            resolved
+          end
+        )
+        |> Nvir.dotenv!(file)
+
+      assert_received {:stats, stats}
+
+      # Should fetch 3 unique secrets
+      assert stats.fetches == 3
+      # Should have 4 cache hits (7 total vars - 3 fetches)
+      assert stats.hits == 4
+      # Should have 3 unique secrets cached
+      assert map_size(stats.cache) == 3
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("DATABASE_URL")
+      assert "prod_user" = System.fetch_env!("DATABASE_USER")
+      assert "super_secret_pass" = System.fetch_env!("DATABASE_PASS")
+      assert "pk_live_abc123" = System.fetch_env!("API_KEY")
+      assert "pk_test_xyz789" = System.fetch_env!("API_DEBUG_KEY")
+      assert "cached_value_123" = System.fetch_env!("CACHE_TEST")
+      assert "cached_value_123" = System.fetch_env!("CACHE_TEST_2")
+    end
+
+    test "resolves secret without fragment as full JSON" do
+      delete_key("FULL_SECRET")
+
+      file = create_file("FULL_SECRET=secret:///api/keys")
+
+      PseudoSecretManager.mock(%{
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      Nvir.dotenv_loader()
+      |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+      |> Nvir.dotenv!(file)
+
+      json = System.fetch_env!("FULL_SECRET")
+      decoded = JSON.decode!(json)
+
+      assert %{"prod" => "pk_live_abc123", "debug" => "pk_test_xyz789"} == decoded
+    end
+
+    test "works with overwrite sources" do
+      delete_key("PROD_DB_URL")
+      delete_key("PROD_DB_USER")
+      delete_key("API_KEY")
+
+      regular_file =
+        create_file("""
+        PROD_DB_URL=secret:///db/prod/credentials#url
+        PROD_DB_USER=secret:///db/prod/credentials#username
+        """)
+
+      overwrite_file =
+        create_file("""
+        API_KEY=secret:///api/keys#debug
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        },
+        "/api/keys" => %{
+          "prod" => "pk_live_abc123",
+          "debug" => "pk_test_xyz789"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(before_env_set_all: {PseudoSecretManager, :resolve_all, []})
+        |> Nvir.dotenv!([regular_file, overwrite: overwrite_file])
+
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("PROD_DB_URL")
+      assert "prod_user" = System.fetch_env!("PROD_DB_USER")
+      assert "pk_test_xyz789" = System.fetch_env!("API_KEY")
+
+      assert %{
+               "PROD_DB_URL" => "postgres://prod.example.com:5432/mydb",
+               "PROD_DB_USER" => "prod_user",
+               "API_KEY" => "pk_test_xyz789"
+             } == changes
+    end
+
+    test "verifies hook execution order" do
+      delete_key("PREFIXED_URL")
+      delete_key("DB_URL")
+      delete_key("PLAIN")
+
+      file =
+        create_file("""
+        DB_URL=secret:///db/prod/credentials#url
+        PLAIN=value
+        """)
+
+      PseudoSecretManager.mock(%{
+        "/db/prod/credentials" => %{
+          "url" => "postgres://prod.example.com:5432/mydb",
+          "username" => "prod_user",
+          "password" => "super_secret_pass"
+        }
+      })
+
+      changes =
+        Nvir.dotenv_loader()
+        |> Nvir.dotenv_configure(
+          before_env_set_all: {PseudoSecretManager, :resolve_all, []},
+          before_env_set: fn
+            {"DB_URL", v} -> {"PREFIXED_URL", v}
+            other -> other
+          end
+        )
+        |> Nvir.dotenv!(file)
+
+      # If before_env_set_all ran first, PseudoSecretManager would see DB_URL and raise.
+      # Since it doesn't raise, before_env_set must have run first and renamed it to PREFIXED_URL.
+      assert "postgres://prod.example.com:5432/mydb" = System.fetch_env!("PREFIXED_URL")
+      assert "value" = System.fetch_env!("PLAIN")
+      assert :error = System.fetch_env("DB_URL")
+
+      assert %{
+               "PREFIXED_URL" => "postgres://prod.example.com:5432/mydb",
+               "PLAIN" => "value"
              } == changes
     end
   end

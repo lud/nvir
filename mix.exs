@@ -16,6 +16,8 @@ defmodule Nvir.MixProject do
       modkit: modkit(),
       dialyzer: dialyzer(),
       versioning: versioning(),
+      modkit: modkit(),
+      elixirc_paths: elixirc_paths(Mix.env()),
       docs: [
         main: "readme",
         extra_section: "GUIDES",
@@ -25,6 +27,14 @@ defmodule Nvir.MixProject do
         groups_for_extras: groups_for_extras()
       ]
     ]
+  end
+
+  defp elixirc_paths(:test) do
+    ["lib", "test/support"]
+  end
+
+  defp elixirc_paths(_) do
+    ["lib"]
   end
 
   def doc_extras do
@@ -82,7 +92,8 @@ defmodule Nvir.MixProject do
   defp modkit do
     [
       mount: [
-        {Nvir, "lib/nvir"}
+        {Nvir, "lib/nvir"},
+        {Nvir.Test, "test/support"}
       ]
     ]
   end
@@ -99,7 +110,7 @@ defmodule Nvir.MixProject do
 
   def cli do
     [
-      preferred_envs: [dialyzer: :test]
+      preferred_envs: [dialyzer: :test, "mod.relocate": :test]
     ]
   end
 
