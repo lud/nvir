@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2026-01-21
+
+### 🚀 Features
+
+- Added before_env_set_all hook and support MFA tuples for hooks
+
+### 🐛 Bug Fixes
+
+- Fix error display config reader
+
 ## [0.15.0] - 2025-12-11
 
 ### 🚀 Features
@@ -142,5 +152,4 @@ All notable changes to this project will be documented in this file.
 
 - Initialization of the repository
 - Added license
-
 
