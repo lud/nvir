@@ -1,5 +1,3 @@
-# credo:disable-for-this-file Credo.Check.Refactor.Nesting
-
 defmodule Nvir.Parser do
   @moduledoc """
   A behaviour for environment variables sources parser.
