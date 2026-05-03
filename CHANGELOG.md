@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.1] - 2026-05-03
+
+### 🐛 Bug Fixes
+
+- Fixed conditional loading of files on darwin platforms
+
+### ⚙️ Miscellaneous Tasks
+
+- Remove unused credo skip
+
 ## [0.16.0] - 2026-01-21
 
 ### 🚀 Features
