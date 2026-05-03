@@ -12,7 +12,8 @@
 Nvir is a powerful environment variable loader for Elixir that provides:
 
 * Simple loading of dotenv files with support for inheritance and interpolation.
-* Optional loading of dotenv files depending on the `:test`, `:dev` environment, CI environment, operating system, and custom conditions.
+* Tag-based conditional loading: load different dotenv files per environment, CI provider,
+  operating system, or custom conditions.
 * Strong validation and type casting of environment variables.
 * Support for custom casters and variables transformers.
 
@@ -36,22 +37,25 @@ end
 <!-- rdmx /:app_dep -->
 
 
-
-
 ## Basic Usage
 
 You will generally use Nvir from your `config/runtime.exs` file.
 
 * Import the module functions, and call `dotenv!/1` to load your files.
+* Tag file entries with `:dev`, `:test`, `:ci`, `:linux`, etc. to load them conditionally.
 * Use `env!/2` to require a variable and validate it.
 * Use `env!/3` to provide a default value.
 
+<!-- rdmx :section format:true name:"basic usage" -->
 ```elixir
 # runtime.exs
 import Config
 import Nvir
 
-dotenv!([".env", ".env.#{config_env()}"])
+dotenv!(
+  dev: ".env",
+  test: ".env.test"
+)
 
 config :my_app, MyAppWeb.Endpoint,
   secret_key_base: env!("SECRET_KEY_BASE", :string!),
@@ -65,6 +69,7 @@ config :my_app, MyApp.Repo,
   hostname: env!("DB_HOSTNAME", :string!),
   port: env!("DB_PORT", :integer!, 5432)
 ```
+<!-- rdmx /:section -->
 
 This is most of what you need to know to start using this library.
 

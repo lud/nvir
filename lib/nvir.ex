@@ -89,14 +89,23 @@ defmodule Nvir do
         end
       end)
 
-    defaults =
-      case :os.type() do
-        {:unix, :linux} -> Map.put(defaults, :linux, true)
-        {:win32, _} -> Map.put(defaults, :windows, true)
-        _ -> defaults
-      end
+    defaults_for_os(:os.type(), defaults)
+  end
 
-    defaults
+  defp defaults_for_os({:unix, :linux}, acc) do
+    Map.put(acc, :linux, true)
+  end
+
+  defp defaults_for_os({:unix, :darwin}, acc) do
+    Map.put(acc, :darwin, true)
+  end
+
+  defp defaults_for_os({:win32, _}, acc) do
+    Map.put(acc, :windows, true)
+  end
+
+  defp defaults_for_os(_, acc) do
+    acc
   end
 
   @doc false

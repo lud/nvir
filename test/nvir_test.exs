@@ -68,6 +68,27 @@ defmodule NvirTest do
       end
     end
 
+    test "default_dotenv_sources/0 detects the current operating system" do
+      sources = Nvir.default_dotenv_sources()
+
+      {expected_tag, absent_tags} =
+        case :os.type() do
+          {:unix, :linux} -> {:linux, [:darwin, :windows]}
+          {:unix, :darwin} -> {:darwin, [:linux, :windows]}
+          {:win32, _} -> {:windows, [:linux, :darwin]}
+          _ -> {nil, [:linux, :darwin, :windows]}
+        end
+
+      if expected_tag do
+        assert sources[expected_tag] == true
+      end
+
+      for tag <- absent_tags do
+        refute Map.has_key?(sources, tag),
+               "Expected #{tag} to not be in default sources on this OS"
+      end
+    end
+
     test "cannot change the :overwrite tag" do
       assert_raise ArgumentError, fn ->
         Nvir.dotenv_enable_sources(Nvir.dotenv_loader(), :overwrite, true)
