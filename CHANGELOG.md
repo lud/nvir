@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.2] - 2026-05-10
+
+### 🐛 Bug Fixes
+
+- Catch parse error for unexpected lines starting with non-key characters
+
 ## [0.16.1] - 2026-05-03
 
 ### 🐛 Bug Fixes
