@@ -5,6 +5,7 @@ defmodule Nvir.ParserTest do
   use ExUnit.Case,
     async: false,
     parameterize: [
+      # TODO remove parameterizing
       %{parser: Nvir.Parser.DefaultParser}
     ]
 
@@ -1049,6 +1050,19 @@ defmodule Nvir.ParserTest do
       msg = valid_parse_error!(e)
       assert msg =~ "unexpected token"
       assert %ParseError{line: 1, col: 11} = e
+    end
+
+    test "unexpected line", %{parser: parser} do
+      env = """
+      FOO=foo
+      BAR=bar
+      @some_paste hello
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected token"
+      assert %ParseError{line: 3, col: 1} = e
     end
   end
 end

@@ -462,8 +462,14 @@ defmodule Nvir.Parser.DefaultParser do
   defp parse_key(tokens) do
     {key, tokens} =
       case skip_ws_token(tokens) do
-        [{:keychars, _, "export"}, {:ws, _, _}, {:keychars, _, key} | rest] -> {key, rest}
-        [{:keychars, _, key} | rest] -> {key, rest}
+        [{:keychars, _, "export"}, {:ws, _, _}, {:keychars, _, key} | rest] ->
+          {key, rest}
+
+        [{:keychars, _, key} | rest] ->
+          {key, rest}
+
+        [{_token, {line, col}, content} | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(content)}"})
       end
 
     tokens =
