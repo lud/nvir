@@ -474,7 +474,11 @@ defmodule Nvir.Parser.DefaultParser do
 
     tokens =
       case skip_ws_token(tokens) do
-        [{:assign_op, _} | rest] -> rest
+        [{:assign_op, _} | rest] ->
+          rest
+
+        [{_token, {line, col}, content} | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(content)}"})
       end
 
     # no skip after the assign op

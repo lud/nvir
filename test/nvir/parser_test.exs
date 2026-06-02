@@ -1064,5 +1064,18 @@ defmodule Nvir.ParserTest do
       assert msg =~ "unexpected token"
       assert %ParseError{line: 3, col: 1} = e
     end
+
+    test "unexpected command", %{parser: parser} do
+      env = """
+      FOO=foo
+      BAR=bar
+      echo "$PRIVATE_KEY" | openssl pkey -pubout -outform DER 2>/dev/null | openssl dgst -sha256 -binary | openssl enc -base64
+      """
+
+      assert {:error, e} = parse(parser, env)
+      msg = valid_parse_error!(e)
+      assert msg =~ "unexpected token"
+      assert %ParseError{line: 3, col: 6} = e
+    end
   end
 end

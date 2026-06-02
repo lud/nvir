@@ -33,11 +33,6 @@ defmodule NvirTest do
     Nvir.dotenv_enable_sources(Nvir.dotenv_new(), env, true)
   end
 
-  defp match_env(envs) when is_list(envs) do
-    conf = Map.new(envs, fn env when is_atom(env) -> {env, true} end)
-    Nvir.dotenv_enable_sources(Nvir.dotenv_new(), conf)
-  end
-
   describe "dotenv loaders" do
     test "empty loader" do
       assert %Nvir{enabled_sources: %{}} == Nvir.dotenv_new()
