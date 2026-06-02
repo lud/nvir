@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.3] - 2026-06-02
+
+### 🐛 Bug Fixes
+
+- Catch parse error on non-assignment lines
+
 ## [0.16.2] - 2026-05-10
 
 ### 🐛 Bug Fixes
