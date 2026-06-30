@@ -76,14 +76,8 @@ defmodule Nvir.MixProject do
       # Test
       {:briefly, "~> 0.5.1", only: :test},
 
-      # Doc
-      {:ex_doc, ">= 0.0.0", only: :dev, runtime: false},
-
-      # Checks
-      {:ex_check, "~> 0.16.0", only: [:dev, :test], runtime: false},
-      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
-      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
-      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      # Dev
+      {:libdev, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:readmix, "~> 0.3", only: [:dev, :test], runtime: false}
     ]
   end

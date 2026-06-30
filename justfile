@@ -1,11 +1,11 @@
 test:
   mix test
 
-_mix_check:
-  mix check
+_libdev_check:
+  mix libdev.check
 
 format:
-  mix format
+  mix format --migrate
 
 docs:
   mix docs
@@ -17,4 +17,4 @@ readmix:
   mix rdmx.update README.md
   rg rdmx guides -l0 | xargs -0 -n 1 mix rdmx.update
 
-check: format _mix_check docs readmix _git_status
+check: format readmix _libdev_check _git_status

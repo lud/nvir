@@ -16,16 +16,16 @@ defmodule Nvir.Parser.DefaultParser do
               [?ú, ?Ú, ?ù, ?Ù, ?û, ?Û, ?ü, ?Ü]
             ])
 
-  defguard is_key_char(c)
-           when c in ?A..?Z or c in ?a..?z or c in ?0..?9 or c == ?_ or c in @accented
+  defguardp is_key_char(c)
+            when c in ?A..?Z or c in ?a..?z or c in ?0..?9 or c == ?_ or c in @accented
 
-  defguard is_start_key_char(c)
-           when c in ?A..?Z or c in ?a..?z or c == ?_
+  defguardp is_start_key_char(c)
+            when c in ?A..?Z or c in ?a..?z or c == ?_
 
-  defguard is_whitespace(c) when c in [?\s, ?\t]
+  defguardp is_whitespace(c) when c in [?\s, ?\t]
 
-  defguard is_raw_char(c)
-           when not is_whitespace(c) and c not in [?\n, ?#, ?", ?', ?$] and not is_whitespace(c)
+  defguardp is_raw_char(c)
+            when not is_whitespace(c) and c not in [?\n, ?#, ?", ?', ?$] and not is_whitespace(c)
 
   @impl true
   def parse_file(path) do
@@ -34,6 +34,12 @@ defmodule Nvir.Parser.DefaultParser do
     |> parse_string(path)
   end
 
+  @doc """
+  Parses dotenv `content` and returns `{:ok, variables}` on success, or
+  `{:error, %Nvir.Parser.ParseError{}}` on failure.
+
+  `source_path` names the source in error messages.
+  """
   def parse_string(content, source_path \\ "(nofile)") when is_binary(content) do
     tokens = tokenize(content)
     entries = parse(tokens)
@@ -420,7 +426,7 @@ defmodule Nvir.Parser.DefaultParser do
   #                                   Parser
   # ---------------------------------------------------------------------------
 
-  def parse(tokens) do
+  defp parse(tokens) do
     tokens
     |> Enum.chunk_by(fn
       {:newline, _} -> true
