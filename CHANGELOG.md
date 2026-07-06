@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.4] - 2026-07-06
+
+### 🐛 Bug Fixes
+
+- Reject invalid UTF-8 and NUL bytes in dotenv files and keep file contents out of parse errors
+
 ## [0.16.3] - 2026-06-02
 
 ### 🐛 Bug Fixes
