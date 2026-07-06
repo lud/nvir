@@ -28,7 +28,7 @@ As usual, pull the library from your `mix.exs` file.
 
 <!-- rdmx :app_dep vsn:$app_vsn -->
 ```elixir
-def deps do
+defp deps do
   [
     {:nvir, "~> 0.16"},
   ]
