@@ -12,6 +12,15 @@ defmodule Nvir.ParserTest do
   doctest Nvir.Parser
 
   defp parse(parser, string) do
+    # IO.puts("--------- PARSING -------")
+
+    # if String.printable?(string) do
+    #   IO.puts(string)
+    # else
+    #   IO.puts("NOT PRINTABLE")
+    # end
+
+    # IO.puts("-------------------------")
     parser.parse_string(string)
   end
 
@@ -842,7 +851,9 @@ defmodule Nvir.ParserTest do
   describe "parsing error tests" do
     defp valid_parse_error!(e) do
       msg = Exception.message(e)
+
       refute msg =~ "retrieving Exception.message/1"
+
       # IO.puts("--------------- ERROR ---------------")
       # IO.puts(msg)
       # IO.puts("-------------------------------------")
@@ -1076,6 +1087,151 @@ defmodule Nvir.ParserTest do
       msg = valid_parse_error!(e)
       assert msg =~ "unexpected token"
       assert %ParseError{line: 3, col: 6} = e
+    end
+  end
+
+  describe "malformed input safety" do
+    # The parser contract is to always return {:error, %ParseError{}} on bad
+    # input. Also, dotenv files typically contain secrets and error messages
+    # end up in logs, so the error message must never embed values from the
+    # file. Debug output including file contents is a separate, explicit
+    # opt-in (:unsafe_display_file_contents_in_errors).
+
+    test "key without assignment", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, "FOO\n")
+      valid_parse_error!(e)
+      assert %ParseError{line: 1} = e
+    end
+
+    test "line starting with a dollar sign", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, "$SECRET_TOKEN=hunter2-value\n")
+      valid_parse_error!(e)
+      refute e.errmsg =~ "hunter2-value"
+    end
+
+    test "line starting with the assign operator", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, "=some-value\n")
+      valid_parse_error!(e)
+      refute e.errmsg =~ "some-value"
+    end
+
+    test "invalid UTF-8 in a raw value", %{parser: parser} do
+      # 0xE9 is "é" in latin-1, and an invalid byte sequence in UTF-8
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=", 0xE9, "\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "invalid UTF-8 in a double quoted value", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=\"", 0xE9, "\"\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "NUL byte in a value", %{parser: parser} do
+      # Environment variable values cannot contain NUL bytes,
+      # System.put_env/2 rejects them with a bare ArgumentError. The parser
+      # should report those bytes with line/col information instead.
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=a", 0, "b\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "error messages do not contain values from the file", %{parser: parser} do
+      # A missing "=" makes the value appear at an unexpected position, so an
+      # easy typo would leak the value into the error message.
+      assert {:error, %ParseError{} = e} = parse(parser, "FOO 'my-secret-value'\n")
+      e = %{e | debug_content: nil}
+      valid_parse_error!(e)
+      refute e.errmsg =~ "my-secret-value"
+
+      assert {:error, %ParseError{} = e} = parse(parser, ~s("quoted-secret"=x\n))
+      e = %{e | debug_content: nil}
+      valid_parse_error!(e)
+      refute e.errmsg =~ "quoted-secret"
+    end
+
+    test "dollar variable between key and assign operator", %{parser: parser} do
+      # The :dollar token has no content element, so it needs a dedicated
+      # match where a content-bearing token is expected.
+      assert {:error, %ParseError{} = e} = parse(parser, "FOO $X=1\n")
+      valid_parse_error!(e)
+    end
+
+    test "invalid UTF-8 in a single quoted value", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY='", 0xE9, "'\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "invalid UTF-8 in a multiline single quoted value", %{parser: parser} do
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY='''\n", 0xE9, "\n'''\n">>)
+
+      valid_parse_error!(e)
+      assert %ParseError{line: 2} = e
+    end
+
+    test "invalid UTF-8 in a multiline double quoted value", %{parser: parser} do
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY=\"\"\"\n", 0xE9, "\n\"\"\"\n">>)
+
+      valid_parse_error!(e)
+      assert %ParseError{line: 2} = e
+    end
+
+    test "invalid UTF-8 in a comment", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, <<"# hello ", 0xE9, "\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "invalid UTF-8 in variable braces", %{parser: parser} do
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=${F", 0xE9, "}\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "NUL byte in quoted values", %{parser: parser} do
+      # NUL is a valid UTF-8 codepoint so the quoted-string clauses accept
+      # it, but System.put_env/2 rejects values containing NUL bytes.
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=\"a", 0, "b\"\n">>)
+      valid_parse_error!(e)
+
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY='a", 0, "b'\n">>)
+      valid_parse_error!(e)
+
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY=\"\"\"\na", 0, "b\n\"\"\"\n">>)
+
+      valid_parse_error!(e)
+
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY='''\na", 0, "b\n'''\n">>)
+
+      valid_parse_error!(e)
+    end
+
+    test "NUL byte escaped in a double quoted value", %{parser: parser} do
+      # The escape clause consumes the byte after the backslash before the
+      # generic character clauses can look at it.
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=\"a\\", 0, "b\"\n">>)
+      valid_parse_error!(e)
+    end
+
+    test "NUL byte escaped in multiline values", %{parser: parser} do
+      # The escape clauses of the multiline string functions also consume the
+      # byte after the backslash before the generic character clauses.
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY=\"\"\"\na\\", 0, "b\n\"\"\"\n">>)
+
+      valid_parse_error!(e)
+
+      assert {:error, %ParseError{} = e} =
+               parse(parser, <<"SOME_KEY='''\na\\", 0, "b\n'''\n">>)
+
+      valid_parse_error!(e)
+    end
+
+    test "NUL byte in a comment glued to a value", %{parser: parser} do
+      # A "#" without whitespace before it is part of the value, so the
+      # comment content ends up in the variable value.
+      assert {:error, %ParseError{} = e} = parse(parser, <<"SOME_KEY=x#a", 0, "b\n">>)
+      valid_parse_error!(e)
     end
   end
 end

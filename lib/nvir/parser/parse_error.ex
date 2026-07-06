@@ -49,6 +49,12 @@ defmodule Nvir.Parser.ParseError do
 
     marker = ["\n ", String.duplicate(" ", numwidth), String.duplicate("-", col - 1), "^"]
 
-    IO.iodata_to_binary(["\n\n", extract, marker])
+    str = IO.iodata_to_binary(["\n\n", extract, marker])
+
+    if String.printable?(str) do
+      str
+    else
+      "--non-printable-chars--"
+    end
   end
 end

@@ -434,6 +434,39 @@ defmodule NvirTest do
 
       assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
     end
+
+    test "malformed file raises LoadError without leaking values" do
+      # Whatever the malformation, dotenv! must raise Nvir.LoadError, whose
+      # message points to the file location without embedding values from the
+      # file, as dotenv files typically contain secrets and raise messages
+      # end up in logs and CI output.
+      file =
+        create_file("""
+        DB_HOST=localhost
+        $SECRET_TOKEN=hunter2-value
+        """)
+
+      e = assert_raise(Nvir.LoadError, fn -> Nvir.dotenv!(file) end)
+      msg = Exception.message(e)
+      assert msg =~ file
+      refute msg =~ "hunter2-value"
+    end
+
+    test "file with invalid UTF-8 raises LoadError" do
+      # 0xE9 is "é" in latin-1, and an invalid byte sequence in UTF-8
+      file = create_file(<<"SOME_KEY=", 0xE9, "\n">>)
+
+      assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
+    end
+
+    test "file with a NUL byte raises LoadError" do
+      # System.put_env/2 rejects values containing NUL bytes, so the file
+      # must be rejected at parse time with proper location information.
+      delete_key("SOME_NUL_VAR")
+      file = create_file(<<"SOME_NUL_VAR=a", 0, "b\n">>)
+
+      assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
+    end
   end
 
   describe "before_env_set hook" do

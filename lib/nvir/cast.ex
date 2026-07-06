@@ -1,6 +1,16 @@
 defmodule Nvir.Cast do
   @moduledoc """
   Collection of casters for environment variables.
+
+  The list of built-in casters is described in the [reading environment
+  variables](guides/var-reading/the-env-functions.md#built-in-casters) guide.
+
+  The `:atom`, `:atom?` and `:atom!` casters create atoms dynamically with
+  `String.to_atom/1`, and atoms stay in memory for the whole life of the
+  virtual machine. Use those casters for variables whose possible values are
+  defined by your own application and deployment files. For values that come
+  from the outside world, use the `:existing_atom` variants, which only accept
+  values that are already atoms in your application.
   """
 
   @type caster ::

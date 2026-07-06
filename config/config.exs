@@ -1,3 +1,3 @@
 import Config
 
-config :nvir, display_file_contents_in_errors: true
+config :nvir, unsafe_display_file_contents_in_errors: true

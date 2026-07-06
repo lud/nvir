@@ -147,6 +147,14 @@ With `PORT=""` in the environment:
 Note that using `:existing_atom` with empty strings will not raise an exception
 because the `:""` atom is valid and is generally defined by the system on boot.
 
+Atoms in Elixir stay in memory for the whole life of the virtual machine. The
+`:atom`, `:atom?` and `:atom!` casters call `String.to_atom/1`, which creates a
+new atom whenever the value was never used as an atom before. Use those casters
+for variables whose possible values are defined by your own application and
+deployment files. For values that come from the outside world, use the
+`:existing_atom` variants, which only accept values that are already atoms in
+your application.
+
 ### Deprecated casters
 
 Those exist for legacy reasons and should be avoided. They will trigger a

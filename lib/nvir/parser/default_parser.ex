@@ -25,7 +25,8 @@ defmodule Nvir.Parser.DefaultParser do
   defguardp is_whitespace(c) when c in [?\s, ?\t]
 
   defguardp is_raw_char(c)
-            when not is_whitespace(c) and c not in [?\n, ?#, ?", ?', ?$] and not is_whitespace(c)
+            when not is_whitespace(c) and c not in [?\n, ?#, ?", ?', ?$, 0] and
+                   not is_whitespace(c)
 
   @impl true
   def parse_file(path) do
@@ -60,7 +61,7 @@ defmodule Nvir.Parser.DefaultParser do
     attach_error_content(error, content)
   end
 
-  case Application.compile_env(:nvir, :display_file_contents_in_errors) do
+  case Application.compile_env(:nvir, :unsafe_display_file_contents_in_errors) do
     true ->
       defp attach_error_content(error, content) do
         Nvir.Parser.ParseError.with_debug_content(error, content)
@@ -78,10 +79,6 @@ defmodule Nvir.Parser.DefaultParser do
 
   defp tokenize(string) do
     tokenize(string, 1, 1, [])
-  end
-
-  defp tokenize(<<>>, _line, _col, tokens) do
-    :lists.reverse(tokens)
   end
 
   defp tokenize(<<c::utf8, rest::binary>>, line, col, tokens) when is_start_key_char(c) do
@@ -118,7 +115,7 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp tokenize(<<?#, rest::binary>>, line, col, tokens) do
-    {val_rest, next_col, rest} = take_comment(rest, col + 1, [])
+    {val_rest, next_col, rest} = take_comment(rest, line, col + 1, [])
     val = <<?#, val_rest::binary>>
     tokens = [{:comment, {line, col}, val} | tokens]
     tokenize(rest, line, next_col, tokens)
@@ -195,6 +192,14 @@ defmodule Nvir.Parser.DefaultParser do
     tokenize(rest, line, next_col, tokens)
   end
 
+  defp tokenize(<<other, _::binary>>, line, col, _tokens) do
+    throw({:parse_error, line, col, "invalid token: #{inspect(<<other>>)}"})
+  end
+
+  defp tokenize(<<>>, _line, _col, tokens) do
+    :lists.reverse(tokens)
+  end
+
   # -- Key Chars --------------------------------------------------------------
 
   defp take_key_chars(<<c::utf8, rest::binary>>, col, acc) when is_key_char(c) do
@@ -230,18 +235,23 @@ defmodule Nvir.Parser.DefaultParser do
 
   # -- Comment ----------------------------------------------------------------
 
-  defp take_comment(<<?\n, _::binary>> = rest, col, acc) do
+  defp take_comment(<<?\n, _::binary>> = rest, _line, col, acc) do
     val = List.to_string(:lists.reverse(acc))
     {val, col, rest}
   end
 
-  defp take_comment(<<>>, col, acc) do
+  defp take_comment(<<>>, _line, col, acc) do
     val = List.to_string(:lists.reverse(acc))
     {val, col, <<>>}
   end
 
-  defp take_comment(<<c::utf8, rest::binary>>, col, acc) do
-    take_comment(rest, col + 1, [c | acc])
+  defp take_comment(<<c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col)
+    take_comment(rest, line, col + 1, [c | acc])
+  end
+
+  defp take_comment(<<_, _::binary>>, line, col, _) do
+    throw({:parse_error, line, col, "invalid character"})
   end
 
   # -- Single Line Double Quoted ----------------------------------------------
@@ -253,6 +263,7 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_double_quoted(<<?\\, c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col + 1)
     take_double_quoted(rest, line, col + 2, [unescape(c) | acc])
   end
 
@@ -273,7 +284,15 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_double_quoted(<<c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col)
     take_double_quoted(rest, line, col + 1, [c | acc])
+  end
+
+  defp take_double_quoted(<<other, _::binary>>, line, col, _) do
+    throw(
+      {:parse_error, line, col,
+       "invalid character in double quoted string: #{inspect(<<other>>)}"}
+    )
   end
 
   defp take_double_quoted(<<>>, line, col, _acc) do
@@ -289,6 +308,7 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_double_quoted_multi(<<?\\, c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col + 1)
     take_double_quoted_multi(rest, line, col + 2, [unescape(c) | acc])
   end
 
@@ -306,7 +326,12 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_double_quoted_multi(<<c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col)
     take_double_quoted_multi(rest, line, col + 1, [c | acc])
+  end
+
+  defp take_double_quoted_multi(<<_, _::binary>>, line, col, _) do
+    throw({:parse_error, line, col, "invalid character"})
   end
 
   defp take_double_quoted_multi(<<>>, line, col, _acc) do
@@ -329,10 +354,15 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_single_quoted(<<c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col)
     take_single_quoted(rest, line, col + 1, [c | acc])
   end
 
-  defp take_single_quoted(<<>>, line, col, _acc) do
+  defp take_single_quoted(<<_, _::binary>>, line, col, _) do
+    throw({:parse_error, line, col, "invalid character"})
+  end
+
+  defp take_single_quoted(<<>>, line, col, _) do
     throw({:parse_error, line, col, "unexpected eof in single quoted string"})
   end
 
@@ -351,6 +381,7 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_single_quoted_multi(<<?\\, c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col + 1)
     take_single_quoted_multi(rest, line, col + 2, [c, ?\\ | acc])
   end
 
@@ -360,7 +391,12 @@ defmodule Nvir.Parser.DefaultParser do
   end
 
   defp take_single_quoted_multi(<<c::utf8, rest::binary>>, line, col, acc) do
+    valid_char!(c, line, col)
     take_single_quoted_multi(rest, line, col + 1, [c | acc])
+  end
+
+  defp take_single_quoted_multi(<<_, _::binary>>, line, col, _acc) do
+    throw({:parse_error, line, col, "invalid character"})
   end
 
   defp take_single_quoted_multi(<<>>, line, col, _acc) do
@@ -397,7 +433,7 @@ defmodule Nvir.Parser.DefaultParser do
     take_enclosed_var(rest, line, col + 1, [c | acc])
   end
 
-  defp take_enclosed_var(<<_bad_char::utf8, _::binary>>, line, col, _acc) do
+  defp take_enclosed_var(<<_bad_char, _::binary>>, line, col, _acc) do
     throw({:parse_error, line, col, "invalid variable name"})
   end
 
@@ -455,27 +491,30 @@ defmodule Nvir.Parser.DefaultParser do
         [{:ws, _, _}, {:comment, _, _}] ->
           :ok
 
-        [{tag, {line, col}, _value} | _] ->
-          throw({:parse_error, line, col, "unexpected token #{tag}"})
+        [{_tag, {line, col}, _value} = token | _] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
 
-        [{tag, {line, col}} | _] ->
-          throw({:parse_error, line, col, "unexpected token #{tag}"})
+        [{_tag, {line, col}} = token | _] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
       end
 
     {key, value}
   end
 
   defp parse_key(tokens) do
-    {key, tokens} =
+    {key, keymeta, tokens} =
       case skip_ws_token(tokens) do
-        [{:keychars, _, "export"}, {:ws, _, _}, {:keychars, _, key} | rest] ->
-          {key, rest}
+        [{:keychars, keymeta, "export"}, {:ws, _, _}, {:keychars, _, key} | rest] ->
+          {key, keymeta, rest}
 
-        [{:keychars, _, key} | rest] ->
-          {key, rest}
+        [{:keychars, keymeta, key} | rest] ->
+          {key, keymeta, rest}
 
-        [{_token, {line, col}, content} | _rest] ->
-          throw({:parse_error, line, col, "unexpected token #{inspect(content)}"})
+        [{_tag, {line, col}, _} = token | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
+
+        [{_tag, {line, col}} = token | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
       end
 
     tokens =
@@ -483,8 +522,15 @@ defmodule Nvir.Parser.DefaultParser do
         [{:assign_op, _} | rest] ->
           rest
 
-        [{_token, {line, col}, content} | _rest] ->
-          throw({:parse_error, line, col, "unexpected token #{inspect(content)}"})
+        [{_tag, {line, col}, _} = token | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
+
+        [{_tag, {line, col}} = token | _rest] ->
+          throw({:parse_error, line, col, "unexpected token #{inspect(token_to_str(token))}"})
+
+        [] ->
+          {line, col} = keymeta
+          throw({:parse_error, line, col, "missing assignment"})
       end
 
     # no skip after the assign op
@@ -610,5 +656,51 @@ defmodule Nvir.Parser.DefaultParser do
 
   defp concat_value([]) do
     []
+  end
+
+  defp token_to_str(token) do
+    str = to_string(format_token(token))
+
+    if String.printable?(str) do
+      str
+    else
+      "--non-printable-token--"
+    end
+  end
+
+  defp undisclose_str(bin) when is_binary(bin) do
+    [String.slice(bin, 0, 3), "..."]
+  end
+
+  defp format_token({:dollar, _}) do
+    [?$]
+  end
+
+  defp format_token({:dquoted_list, _, _}) do
+    [?"]
+  end
+
+  defp format_token({:squoted, _, _}) do
+    [?']
+  end
+
+  defp format_token({:assign_op, _}) do
+    [?=]
+  end
+
+  defp format_token({:rawchars, _, content}) do
+    undisclose_str(content)
+  end
+
+  defp format_token(_other) do
+    "undisclosed token"
+  end
+
+  defp valid_char!(0, line, col) do
+    throw({:parse_error, line, col, "unexpected null byte"})
+  end
+
+  defp valid_char!(c, _line, _col) do
+    c
   end
 end
