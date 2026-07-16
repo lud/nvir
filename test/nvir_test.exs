@@ -205,6 +205,33 @@ defmodule NvirTest do
     path
   end
 
+  defp create_pipe_file(contents) do
+    dir = Briefly.create!(type: :directory)
+    path = Path.join(dir, "nvir-test-pipe.env")
+    copy_path = Path.join(dir, "copy.env")
+    {_, 0} = System.cmd("mkfifo", [path])
+    File.write!(copy_path, contents)
+
+    task =
+      Task.async(fn ->
+        # :os.cmd/1 is required here over System.cmd/3: System.cmd spawns via
+        # :spawn_executable, which deadlocks against this process's pending
+        # blocking read on the fifo below. :os.cmd's :spawn path does not.
+        # The interpolated paths are our own Briefly temp files, not
+        # attacker-controlled input.
+        # credo:disable-for-next-line Credo.Check.Warning.UnsafeExec
+        [] = :os.cmd(~c"cp #{copy_path} #{path}")
+
+        # cp must write into the existing fifo rather than replacing it with
+        # a regular file.
+        :other = File.lstat!(path).type
+
+        :ok
+      end)
+
+    {path, task}
+  end
+
   describe "calling dotenv" do
     test "creates the env vars if they do not exist" do
       _ = delete_key("SOME_VAR1")
@@ -466,6 +493,24 @@ defmodule NvirTest do
       file = create_file(<<"SOME_NUL_VAR=a", 0, "b\n">>)
 
       assert_raise Nvir.LoadError, fn -> Nvir.dotenv!(file) end
+    end
+
+    if match?({:unix, _}, :os.type()) do
+      @tag timeout: 1000
+      test "loads vars from a named pipe (FIFO), as produced by tools like 1Password" do
+        # https://github.com/lud/nvir/issues/86
+        _ = delete_key("PIPE_VAR")
+
+        {file, writer} =
+          create_pipe_file("""
+          PIPE_VAR=from a pipe
+          """)
+
+        assert %{"PIPE_VAR" => "from a pipe"} = Nvir.dotenv!(file)
+        assert "from a pipe" = System.fetch_env!("PIPE_VAR")
+
+        assert :ok = Task.await(writer)
+      end
     end
   end
 
