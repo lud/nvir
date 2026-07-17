@@ -515,10 +515,10 @@ defmodule Nvir do
   end
 
   defp load_file(path, parser) do
-    if File.regular?(path) do
-      parser.parse_file(path)
-    else
-      {:error, :enoent}
+    case File.stat(path) do
+      {:ok, %File.Stat{type: :directory}} -> {:error, :enoent}
+      {:ok, _stat} -> parser.parse_file(path)
+      {:error, _} -> {:error, :enoent}
     end
   end
 
