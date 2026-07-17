@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.5] - 2026-07-17
+
+### 🐛 Bug Fixes
+
+- Support named pipes as .env files (#87)
+
 ## [0.16.4] - 2026-07-06
 
 ### 🐛 Bug Fixes
